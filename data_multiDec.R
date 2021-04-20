@@ -12,7 +12,7 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=2.694167, ra=89.26417, t=630720013.0, 
+signal_multiDec = function(dec=89.26417, ra=2.694167, t=1293494400, 
                            signal="KURODA_TM1_H_resampled.dat", 
                            verbose=TRUE,actPlot=TRUE){
   ######################################################################
@@ -300,7 +300,7 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   data_H = data.frame(t=Tf_H,x=Yf_H,y=YYf_H)
   data_L = data.frame(t=Tf_L,x=Yf_L,y=YYf_L)
   data_V = data.frame(t=Tf_V,x=Yf_V,y=YYf_V)
-  return(list(data_H,data_L,data_V))
+  return(list(data_H=data_H,data_L=data_L,data_V=data_V))
   
 }
 

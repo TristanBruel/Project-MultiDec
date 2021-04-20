@@ -77,7 +77,7 @@ dets = read.csv("detectors_params.csv", sep=";", stringsAsFactors=FALSE, header=
 ### Response for gravitational wave ###
 #######################################
 
-grav_response = function(dec=2.694167, ra=89.26417, t=630720013.0, pol=0, detector){
+grav_response = function(dec, ra, t, pol=0, detector){
   # Inputs : - sky position of the source
   #               declination in ° and right ascension in hours
   #          - time GPS of arrival at the detector
