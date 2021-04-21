@@ -1,6 +1,6 @@
-Detector;name; height; North latitude; East longitude; arm1 polarization; arm2 polarization; arm1 angle to horizontal; arm2 angle to horizontal
-LIGO-Hanford Observatory;LHO;142,554;0,810795264;4,199128538;2,199104386;3,769900713;-0,0006195;0,0000125
-LIGO-Livingston Observatory;LLO;-6,574;0,533423135;4,698875935;3,450803911;5,021600237;-0,0003121;-0,0006107
-VIRGO Interferometer;VIRGO;51,884;0,76151184;0,183338052;1,231633475;2,802429801;0;0
+Detector;name; height; North latitude; East longitude; arm1 azimuth; arm2 azimuth; arm1 polar; arm2 polar
+LIGO-Hanford Observatory;LHO;142.554;0.810795264;4.199128538;2.199104386;3.769900713;-0.0006195;0.0000125
+LIGO-Livingston Observatory;LLO;-6.574;0.533423135;4.698875935;3.450803911;5.021600237;-0.0003121;-0.0006107
+VIRGO Interferometer;VIRGO;51.884;0.76151184;0.183338052;1.231633475;2.802429801;0;0
 ;;;;;;;;
-Reference detector;REF;0;0;0;0;1,570796327;0;0
+Test detector;REF;0;0;0;0;1.570796327;0;0
