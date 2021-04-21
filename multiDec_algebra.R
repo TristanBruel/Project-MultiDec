@@ -71,7 +71,7 @@ earthFrame_to_detector = function(l, lambda, h, az1, az2, polar1, polar2){
 }
 
 # Detectors parameters  
-dets = read.csv("detectors_params.csv", sep=";", stringsAsFactors=FALSE, header=TRUE)
+dets = read.csv("detectors_params.csv", sep=",", stringsAsFactors=FALSE, header=TRUE)
 
 
 ### Response for gravitational wave ###
@@ -93,8 +93,8 @@ grav_response = function(dec, ra, t, pol=0, detector){
   index=which(dets$name == detector)
   params = dets[index,]
   h = params$height
-  l = params$North.latitude
-  lambda = params$East.longitude
+  l = params$North.lat
+  lambda = params$East.lon
   az1 = params$arm1.azimuth
   az2 = params$arm2.azimuth
   polar1 = params$arm1.polar
@@ -142,8 +142,8 @@ time_delay = function(dec, ra, t, detector){
   index=which(dets$name == detector)
   params = dets[index,]
   h = params$height
-  l = params$North.latitude
-  lambda = params$East.longitude
+  l = params$North.lat
+  lambda = params$East.lon
   az1 = params$arm1.azimuth
   az2 = params$arm2.azimuth
   polar1 = params$arm1.polar
