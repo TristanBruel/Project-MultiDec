@@ -12,13 +12,13 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=89.26417, ra=2.694167, t=1293494400, 
+signal_multiDec = function(dec=-65, ra=8, t=1293494400, 
                            signal="KURODA_TM1_H_resampled.dat", 
                            verbose=TRUE,actPlot=TRUE){
   ######################################################################
   # Inputs :  sky position of the source
   #               declination in ° and right ascension in hours
-  #           time GPS at which the wave arrives at the first detector
+  #           time GPS at which the wave arrives at the center of the Earth
   #           name of the (simulated) waveform
   #
   # Outputs : measured time series for the 3 detectors LHO, LLO and VIRGO
@@ -27,10 +27,10 @@ signal_multiDec = function(dec=89.26417, ra=2.694167, t=1293494400,
   fs_orig=4096
   
   gw_filename=paste(folder,signal,sep="")
-  sXX = read.table(gw_filename); # V1 time, V2 hplus, V3 hcross
-  colnames(sXX) = c ("time","hplus","hcross");
+  sXX = read.table(gw_filename) # V1 time, V2 hplus, V3 hcross
+  colnames(sXX) = c ("time","hplus","hcross")
   n = length(sXX$time)
-  duration=n/fs_orig
+  duration=(n-1)/fs_orig
   
   if (verbose==TRUE){
     print(gw_filename)
@@ -54,29 +54,29 @@ signal_multiDec = function(dec=89.26417, ra=2.694167, t=1293494400,
   }
   
   # Time delays between the arrivals at each detector
-  detectors = c("LHO","LLO","VIRGO")
-  delays = c(time_delay(dec, ra, t, "LHO"), time_delay(dec, ra, t, "LLO"), 
-             time_delay(dec, ra, t, "VIRGO"))
-  first = which(delays==max(delays))
-  second = which(delays[-first]==max(delays[-first]))
-  third = which(delays==min(delays))
-  ## WARNING ## : special cases when 2 detectors measure a signal at the exact same time
-  dt_second = delays[first]-delays[second]
-  dt_third = delays[first]-delays[third]
-  
   if (verbose==TRUE){
+    detectors = c("LHO","LLO","VIRGO")
+    delays = c(time_delay(dec, ra, t, "LHO"), time_delay(dec, ra, t, "LLO"), 
+               time_delay(dec, ra, t, "VIRGO"))
+    first = which(delays==max(delays))
+    third = which(delays==min(delays))
+    second = which(!(c(1,2,3)%in%c(first,third)))
+    ## WARNING ## : special cases when 2 detectors measure a signal at the exact same time
+    dt_second = delays[first]-delays[second]
+    dt_third = delays[first]-delays[third]
+  
     print(sprintf("Signal detected first at %s",detectors[first]))
     print(sprintf("Then at %s with a %fs delay",detectors[second],dt_second))
     print(sprintf("And finally at %s with a %fs delay",detectors[third],dt_third))
   }
   
-  time_series = cbind(sXX$time,sXX$time,sXX$time)
-  time_series[,second] = time_series[,second] + dt_second*rep(1,n)
-  time_series[,third] = time_series[,third] + dt_third*rep(1,n)
+  times_H=sXX$time-time_delay(dec,ra,t,"LHO")
+  times_L=sXX$time-time_delay(dec,ra,t,"LLO")
+  times_V=sXX$time-time_delay(dec,ra,t,"VIRGO")
   
-  wvf_LHO=data.frame("time"=time_series[,1],"hoft"=signal_LHO)
-  wvf_LLO=data.frame("time"=time_series[,2],"hoft"=signal_LLO)
-  wvf_VIR=data.frame("time"=time_series[,3],"hoft"=signal_VIR)
+  wvf_LHO=data.frame("time"=times_H,"hoft"=signal_LHO)
+  wvf_LLO=data.frame("time"=times_L,"hoft"=signal_LLO)
+  wvf_VIR=data.frame("time"=times_V,"hoft"=signal_VIR)
   
   
   # Plot
@@ -114,7 +114,7 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   #           data_L
   #           data_V
   
-  n=duration*fs
+  n=duration*fs+1
   wvf_size_H=length(wvf_LHO$hoft)
   wvf_size_L=length(wvf_LLO$hoft)
   wvf_size_V=length(wvf_VIR$hoft)
@@ -133,38 +133,34 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   
   Y_LHO=data$x
   psd_LHO=data$psd           # 2 sided PSD
-  n_data_H=length(Y_LHO)     # factor x n
+  n_data=length(Y_LHO)     # factor x n
 
   # Noise LLO
   data=noise_generator(factor,fs, duration, detector, setseed=setseed, filter=FALSE,
                        actPlot=FALSE, verbose=FALSE)
   Y_LLO=data$x
   psd_LLO=data$psd
-  n_data_L=length(Y_LLO)
   
   # Noise VIRGO
   data=noise_generator(factor,fs, duration, detector, setseed=setseed, filter=FALSE,
                        actPlot=FALSE, verbose=FALSE)
   Y_VIR=data$x
   psd_VIR=data$psd
-  n_data_V=length(Y_VIR)
   
   if (verbose==TRUE){
     print(sprintf("data_generator:size of the output: %d", n))
-    print(sprintf("data_generator:size of the noise in LHO: %d", n_data_H))
+    print(sprintf("data_generator:size of the noise : %d", n_data))
     print(sprintf("data_generator:size of the LHO signal: %d", wvf_size_H))
-    print(sprintf("data_generator:size of the noise in LLO: %d", n_data_L))
     print(sprintf("data_generator:size of the LLO signal: %d", wvf_size_L))
-    print(sprintf("data_generator:size of the noise in VIRGO: %d", n_data_V))
     print(sprintf("data_generator:size of the VIRGO signal: %d", wvf_size_V))
     print(sprintf("data_generator:amplitude of the signal: %f", ampl))
   }
   
   # Signal addition (centered at the middle of the data vector 
   # to avoid filtering leakage at the beginning and end).
-  ind1_H=floor((n_data_H-wvf_size_H)/2)
-  ind1_L=floor((n_data_L-wvf_size_L)/2)
-  ind1_V=floor((n_data_V-wvf_size_V)/2)
+  ind1_H=floor((n_data-wvf_size_H)/2)
+  ind1_L=floor((n_data-wvf_size_L)/2)
+  ind1_V=floor((n_data-wvf_size_V)/2)
   
   for (i in 1:wvf_size_H){
     Y_LHO[ind1_H+i]=Y_LHO[ind1_H+i]+ampl*wvf_LHO$hoft[i]
@@ -188,9 +184,9 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   }
   
   # generate a time series
-  T_H = seq(1, n_data_H, by = 1)
-  T_L = seq(1, n_data_L, by = 1)
-  T_V = seq(1, n_data_V, by = 1)
+  T_H = seq(1, n_data, by = 1)
+  T_L = seq(1, n_data, by = 1)
+  T_V = seq(1, n_data, by = 1)
   
   # select the original data size
   Tf_H = seq(1, n, by = 1)
@@ -198,22 +194,22 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   Tf_V = seq(1, n, by = 1)
   
   for (i in 1:n){
-    Tf_H[i]=wvf_LHO$time[1]+i/fs
-    Tf_L[i]=wvf_LLO$time[1]+i/fs
-    Tf_V[i]=wvf_VIR$time[1]+i/fs
+    Tf_H[i]=wvf_LHO$time[i]
+    Tf_L[i]=wvf_LLO$time[i]
+    Tf_V[i]=wvf_VIR$time[i]
   }
   
   T_wvf_H=seq(1,wvf_size_H,by=1)
   T_wvf_L=seq(1,wvf_size_L,by=1)
   T_wvf_V=seq(1,wvf_size_V,by=1)
   for (i in 1:wvf_size_H){
-    T_wvf_H[i]=wvf_LHO$time[1]+i/fs
+    T_wvf_H[i]=wvf_LHO$time[i]
   }
   for (i in 1:wvf_size_L){
-    T_wvf_L[i]=wvf_LLO$time[1]+i/fs
+    T_wvf_L[i]=wvf_LLO$time[i]
   }
   for (i in 1:wvf_size_V){
-    T_wvf_V[i]=wvf_VIR$time[1]+i/fs
+    T_wvf_V[i]=wvf_VIR$time[i]
   }
   
   Yf_H = seq(1, n, by = 1)
@@ -325,10 +321,10 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   
   if (duration < 10){
     # For 3G detectors we need to use a frequency resolution smaller than 0.1 Hz
-    n=factor*duration*fs 
+    n=factor*(duration*fs+1)
   }
   else{
-    n=duration*fs
+    n=duration*fs+1
   }
   
   if (verbose==TRUE){
