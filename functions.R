@@ -1016,7 +1016,7 @@ plotOneSim = function(data, mod = NULL, postSamples=NULL, dist=1, l=200, p=90,
   psd    = aLIGO_PSD(ff,1);     # one-sided PSD             
   newpsd = aLIGO_PSD_new(ff,1); # one-sided PSD
   
-  noisydata = data;
+  noisydata = data.frame("V1"=data$time,"V2"=data$hoft);
   noisydata$V2 = noisydata$V2 * dist;
 
   out = NULL;
@@ -1040,14 +1040,14 @@ plotOneSim = function(data, mod = NULL, postSamples=NULL, dist=1, l=200, p=90,
   r = specPdgrm(noisydata$V2, l = l, p = p, fs = fs, actPlot = FALSE, logPow = T,
                 zoomFreq=c(0,1)); # generating the spectrogram
  
-  n     = length(data$V1);
+  n     = length(noisydata$V1);
   # starting & ending points of the intervals used in the spectrogram
   index = ints(n = n,l = l, p = p); # from psplinePsd
  
   # centred point for even "l"
   mindx = index + cbind(rep(l/2 -1, dim(index)[1]), rep(-(l/2-1), dim(index)[1]));
   # Ajusting data
-  timedata = seq(from=data$V1[1], to=data$V1[n], length = n);
+  timedata = seq(from=noisydata$V1[1], to=noisydata$V1[n], length = n);
  
   # mean time (centred point) for our g-mode estimates
   timefreq = apply(mindx, 1, function(x) mean(timedata[c(x[1], x[2])]) );

@@ -12,13 +12,15 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=-65, ra=8, t=1293494400, 
+signal_multiDec = function(dec=-65, ra=8, t=1126259462.0, 
                            signal="KURODA_TM1_H_resampled.dat", 
                            verbose=TRUE,actPlot=TRUE){
   ######################################################################
   # Inputs :  sky position of the source
   #               declination in ° and right ascension in hours
+  #               default is sky position of GW150914
   #           time GPS at which the wave arrives at the center of the Earth
+  #               default is time of GW150914
   #           name of the (simulated) waveform
   #
   # Outputs : measured time series for the 3 detectors LHO, LLO and VIRGO
@@ -689,4 +691,94 @@ int = function(n){
   }else{
     return(floor(n))
   }
+}
+
+########################################################################
+aLIGO_PSD = function(f,type){
+  ########################################################################
+  # Original aLIGO PSD function used by Patricio
+  cutoff = -109.35 + log(2e10);
+  fn     = length(f);
+  logpsd = rep(0, fn);
+  if(f[1]==0){
+    f[1]=f[2]
+  }
+  if(type == 1){
+    for(i in 1:fn){
+      x  = f[i]/215;
+      x2 = x*x;
+      logpsd[i] = log(1e-49) + log(x^(-4.14) -5/x2 + 111*(1-x2+0.5*x2*x2)/(1.+0.5*x2));
+      
+      if(logpsd[i]>cutoff){
+        logpsd[i]=cutoff;
+      }
+    }
+    output=exp(logpsd);
+    
+  }else{
+    for(i in 1:(int(fn/2)+1)){
+      x  = abs(f[i]/215);
+      x2 = x*x;
+      logpsd[i] = log(1e-49) + log(x^(-4.14) -5./x2 + 111.*(1-x2+0.5*x2*x2)/(1.+0.5*x2));
+      
+      if(logpsd[i]>cutoff){
+        logpsd[i]=cutoff;
+      }
+      if(i>0){
+        logpsd[fn-i]=logpsd[i];
+      }
+    }
+    output=exp(logpsd)/2;            # Two sided PSD
+  }
+  return (output)
+}
+
+########################################################################
+aLIGO_PSD_new = function(f,type){
+  ########################################################################
+  # aLIGO sensitivity curve: fit the data point from https://dcc.ligo.org/LIGO-T1800044/public
+  # Type=1 --> one-sided PSD.
+  # Type=2 --> two-sided PSD. 
+  
+  S1 = 5.0e-26;
+  S2 = 1.0e-40;
+  S3 = 1.4e-46;
+  S4 = 2.7e-51;
+  fcut = 10;
+  cutoff = 1e-42;
+  fn = length(f);
+  output = rep(0, fn); #np.zeros(len(f))
+  
+  # to avoid issue with f=0
+  if(f[1]==0){
+    f[1]=f[2];
+  }
+  if(type == 1){
+    for(i in 1:fn){
+      x = abs(f[i]);
+      output[i] =  S1/(x^20) + S2/(x^4.05) + S3/(x^.5) + S4*((x/fcut)^2);
+      if(output[i]>cutoff){
+        output[i]=cutoff
+      }
+    }
+  }else{
+    for(i in 1:(int(fn/2)+1)){ # range(int(len(f)/2)+1)
+      x = abs(f[i]);
+      output[i] = S1/(x^20) + S2/(x^4.05) + S3/(x^.5) + S4*((x/fcut)^2);
+      if(output[i]>cutoff){
+        output[i]=cutoff
+      }
+      
+      # Wraparound frequency: f=0 is the first element (i=1), 
+      # and all elements are symetric around index fn/2+1
+      if(i>1 && i<fn/2+1){
+        output[fn+2-i]=output[i]
+      }
+      
+      
+    }  
+    output=output/2;            # Two sided PSD
+    #    output=shifter(output,-1)  # No more needed after correction 4 lines above
+  }
+  return(output);
 }

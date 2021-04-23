@@ -138,7 +138,7 @@ time_delay = function(dec, ra, t, detector){
   if ((detector != "LHO") && (detector != "LLO") && (detector != "VIRGO")){
     stop("detector must be LHO, LLO or VIRGO")
   }
-    
+  
   index=which(dets$name == detector)
   params = dets[index,]
   h = params$height

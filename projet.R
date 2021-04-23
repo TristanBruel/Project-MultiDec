@@ -4,11 +4,17 @@ source("functions.R")
 
 library(signal)
 
-signal = signal_multiDec()
+signal_name="KURODA_TM1_H_resampled.dat"
+signal = signal_multiDec(signal=signal_name)
 fs=4096
+filtering_method="prewhiten"
 
-data = data_multiDec(fs,signal$duration,signal$wvf_LHO,signal$wvf_LLO,
-                     signal$wvf_VIR,ampl=10,verbose=T)
+wvf_LHO=signal$wvf_LHO
+wvf_LLO=signal$wvf_LLO
+wvf_VIR=signal$wvf_VIR
+duration=signal$duration
+
+data = data_multiDec(fs,duration,wvf_LHO,wvf_LLO,wvf_VIR,ampl=10,verbose=TRUE)
 
 specH=specPdgrm(data$data_H$x,data$data_H$t,l=200,p=90,fs,main="LHO")
 specL=specPdgrm(data$data_L$x,data$data_L$t,l=200,p=90,fs,main="LLO")
