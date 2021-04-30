@@ -1,21 +1,30 @@
 source("specPdgrm.R")
 source("data_multiDec.R")
 source("functions.R")
+source("multiDec_algebra.R")
 
 library(signal)
 
+### Source ###
+dec=-65
+ra=8
+t=1126259462.0
+
 signal_name="KURODA_TM1_H_resampled.dat"
-signal = signal_multiDec(signal=signal_name)
+detectors=c("LHO", "LLO", "VIR", "KAG")
+signal = signal_multiDec(dec, ra, t, signal=signal_name, detectors=detectors)
+
+
 fs=4096
 filtering_method="prewhiten"
+gmode=c("right")
 
-wvf_LHO=signal$wvf_LHO
-wvf_LLO=signal$wvf_LLO
-wvf_VIR=signal$wvf_VIR
-duration=signal$duration
+data = data_multiDec(fs,signal,signal$duration, detectors=detectors,
+                     ampl=10,verbose=TRUE);
 
-data = data_multiDec(fs,duration,wvf_LHO,wvf_LLO,wvf_VIR,ampl=10,verbose=TRUE)
 
-specH=specPdgrm(data$data_H$x,data$data_H$t,l=200,p=90,fs,main="LHO")
-specL=specPdgrm(data$data_L$x,data$data_L$t,l=200,p=90,fs,main="LLO")
-specV=specPdgrm(data$data_V$x,data$data_V$t,l=200,p=90,fs,main="VIRGO")
+for (k in 1:length(detectors)){
+spec=specPdgrm(data[[k]]$y,data[[k]]$t,l=100,p=90,fs,
+                main=detectors[k]);
+out=findGmodes(spec, l=100, p=90, gmode=gmode, actPlot = TRUE);
+}

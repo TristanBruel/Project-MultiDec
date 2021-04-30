@@ -1,18 +1,24 @@
 library ("seewave");
 library ("signal")
-source ("data_multiDec.R")
 library(lmvar)
 
 ########################################################################
-findGmodes = function(r, um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8, 
-                      initfreq_R = c(-Inf, Inf), initfreq_L = c(-Inf, Inf),
-                      testSlope = FALSE){
-########################################################################
+findGmodes = function(r, l=100, p=90, movGmode = 11, timeGmode=NULL, gmode="left",
+                      um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8, 
+                      initfreq_R = c(-Inf, Inf), initfreq_L = c(-Inf, Inf), 
+                      testSlope = FALSE, actPlot = FALSE){
+  ########################################################################
   
   # data must not contain zeros, so 'r' must not contain NA values
   # finding g-modes
   
   # r    : output from specPdgrm
+  # l        : interval length in spectrogram
+  # p        : overlaping percentage in spectrogram
+  # movGmode : number of steps to smooth estimated g-modes 
+  # timeGmode: time interval to define g-modes
+  # gmode = starting side to estimate g-mode: c("right", "left, "median")
+  
   # Paremeters for exploration starting from the right side
   # um_R : up   - to define the neighborhood 
   # dm_R : down - to define the neighborhood
@@ -24,15 +30,16 @@ findGmodes = function(r, um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8,
   # dm_L : down - to define the neighborhood
   # m_L  : number of intervals used to calculated starting value
   # initfreq_L: interval to restrict frequency for the starting value
+
   
   #if(initfreq[1]>=initfreq[2])stop("initfreq[1] must be lower than initfreq[2]");
   
   x = r$x; y = r$y; z = r$z; # values from spectrogram
   
-#  for(i in 1:dim(z)[1]){
-#    i1=which.max(z[i,]); # position maximum value
-#    print(c(i1,y[i1],z[i,i1]))
-#    }
+  #  for(i in 1:dim(z)[1]){
+  #    i1=which.max(z[i,]); # position maximum value
+  #    print(c(i1,y[i1],z[i,i1]))
+  #    }
   
   ##################
   ### Right side ###
@@ -85,13 +92,13 @@ findGmodes = function(r, um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8,
   #################
   ### Left side ###
   #################
-
- 
+  
+  
   # limiting frequencies according to initfreq in y
   inity = (y >= initfreq_L[1]) & (y <= initfreq_L[2]); # logical vector
   
   initz = z[1:m_L, ]; # m first columns of the spectrogram
-
+  
   if(m_L != 1){
     
     if(initfreq_L[1] != -Inf || initfreq_L[2] != Inf){
@@ -116,13 +123,13 @@ findGmodes = function(r, um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8,
   
   for(i in 2:dim(z)[1]){
     #if (length((mp-dm_L):(mp+um_L)) > 0){
-      #print(i);
-      ps  = c(ps, mp);
-      ind = (mp-dm_L):(mp+um_L);
-      ind = ind[ind>0]; # preventing values below 0
-      ind = ind[ind<=dim(z)[2]]; # preventing from large values
-      mp  = ind[which.max(z[i, ind])];
-      #print(c(z[i,ind],mp,y[mp]))
+    #print(i);
+    ps  = c(ps, mp);
+    ind = (mp-dm_L):(mp+um_L);
+    ind = ind[ind>0]; # preventing values below 0
+    ind = ind[ind<=dim(z)[2]]; # preventing from large values
+    mp  = ind[which.max(z[i, ind])];
+    #print(c(z[i,ind],mp,y[mp]))
     #}
     #else{
     #  print(c("dm_L+um_L is null",mp,dm_L, um_L))
@@ -206,13 +213,63 @@ findGmodes = function(r, um_R=0, dm_R = 8, um_L = 8, dm_L = 0, m_R = 8, m_L = 8,
     maxf = y[ps]; 
     
   }
-  return(list(maxf_med = maxf, maxf_L = maxf_L, maxf_R = maxf_R));
+
+  maxfs = list(maxf_med = maxf, maxf_L = maxf_L, maxf_R = maxf_R);
+
+
+### PLOT ###
+  n = length(r$x); # number of observations
+
+  # starting & ending points of the intervals used in the spectrogram
+  index = ints(n=n, l=100, p=90); # from psplinePsd
+  
+  # centered point for even "l"
+  mindx = index + cbind(rep(l/2 -1, dim(index)[1]), rep(-(l/2-1), dim(index)[1]));
+  
+  # Adjusting data
+  timedata = seq(from=r$x[1], to=r$x[n], length = n);
+  
+  # mean time (centered point) for our g-mode estimates
+  timefreq = apply(mindx, 1, function(x) mean(timedata[c(x[1], x[2])]) );
+
+  # g-modes
+  if( !is.null(timeGmode)){
+    out = apply(as.matrix(timefreq), 1, 
+                function(x){
+                  if((x >= timeGmode[1]) & (x <= timeGmode[2])){
+                    return(TRUE);
+                  }else{
+                    return(FALSE);
+                  }
+                });
+    
+    timefreq = timefreq[out];
+    
+    r$x = r$x[out];
+    r$z = r$z[out, ]; # row=time, col=freq
+  }
+  
+  maxfs = sapply(maxfs,function(x)movf(x, n=movGmode, mean));# smoothing g-mode estimates
+  maxfs = as.data.frame(maxfs);
+  
+  if(actPlot == TRUE){
+    if(gmode == "left"){
+      points(timedata, maxfs$maxf_L, col='black',type="p")
+    }else if (gmode == "right"){
+      points(timedata, maxfs$maxf_R, col='black')
+    }else{
+      points(timedata, maxfs$maxf_med, col='black')}
+  }
+
+
+return(maxfs);
   
 }
 
+
 ########################################################################
 movf = function(vec, n, f){
-########################################################################
+  ########################################################################
   
   # This function smoothes the numeric vector "vec". 
   # It applies the "f" function in intervals of length "n".
@@ -220,7 +277,7 @@ movf = function(vec, n, f){
   # vec : numeric vector.
   # n   : interval length for smoothing.
   # f   : function to smooth vec, for instance, mean or median.
-
+  
   if(n == 1){
     return(vec);
   }
@@ -262,11 +319,11 @@ movf = function(vec, n, f){
   
 }
 
-    
+
 
 ########################################################################
 ints = function(n, l, p = 00, eq = TRUE){
-########################################################################
+  ########################################################################
   # Function taken from psplinePsd function
   
   #' This function produces a matrix which each row contains the first and last indexes
@@ -343,7 +400,7 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
                   gmode = "right",
                   movBand = 5, timeGmode = NULL, 
                   thruth_data, actPlot = FALSE, limFreq = NULL){
-########################################################################  
+  ########################################################################  
   
   # data     : dataset as matrix (with no zeros [specPdgrm])
   # mod      : model
@@ -377,7 +434,7 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
   ### ###
   true_time = thruth_data$time; 
   true_ratios = thruth_data$ratio
-
+  
   # spectrogram
   r = specPdgrm(data$V2, data$V1, l=l, p=p, fs=fs, actPlot=actPlot, logPow=TRUE,
                 zoomFreq=c(0,1)); # generating the spectrogram
@@ -420,14 +477,14 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
   
   maxfs = sapply(maxfs,function(x)movf(x, n=movGmode, mean));# smoothing g-mode estimates
   maxfs = as.data.frame(maxfs);
-
+  
   if(actPlot == TRUE){
     if(gmode == "left"){
       points(timefreq, maxfs$maxf_L, col='black',type="p")
     }else if (gmode == "right"){
       points(timefreq, maxfs$maxf_R, col='black')
-      }else{
-        points(timefreq, maxfs$maxf_med, col='black')}
+    }else{
+      points(timefreq, maxfs$maxf_med, col='black')}
     #arrows(timefreq, maxfs$maxf_L, timefreq, maxfs$maxf_R, code=3, angle=90,
     #       length=0.05, col="gray");
   }
@@ -469,7 +526,7 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
       discFreq = (maxf < j); # positions to keep 
       
       sfq = sum(discFreq);
-    
+      
       if(sfq <= 2){ 
         if(sfq == 0){
           warning(paste("All frequencies are greater than limFreq", j));
@@ -491,7 +548,7 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
       else { # At least 3 g-modes (in maxf) are required to generate the covpbb band
         maxf1     = maxf[discFreq];     # discarding frequencies according to limFreq
         timefreq1 = timefreq[discFreq]; # discarding time points
-
+        
         # defining true ratios in the band limit given by limFreq 
         discTime = (true_time >= min(timefreq1)) & (true_time <= max(timefreq1));
         true_time1 = true_time[discTime];  
@@ -504,7 +561,7 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
           pred = predict(mod, new, interval = "prediction"); # predictions
         }else if(any(class(mod) == "lmvar")){
           f    = maxf1;
-  
+          
           ### mu ###
           x = colnames(mod$X_mu)
           if(x[1] == "(Intercept)"){
@@ -554,11 +611,11 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
                     fu(true_time1)); # upper band (using predicted ratios)
         
         if(actPlot == TRUE){
-         
+          
           yaux = c(true_ratios, pred[,2:3]);
           plot(true_time1, true_ratio1, xlab = "Time", xlim=c(min(true_time1)*.9,max(true_time1)*1.05),
                ylab = "Ratio", ylim = c(min(yaux), 1.3*max(true_ratio1)), type = "n");
-      #         main = paste("Frequency cutoff", j,"-",gm, "gmode"));
+          #         main = paste("Frequency cutoff", j,"-",gm, "gmode"));
           arrows(timefreq1, pred[,2], timefreq1, pred[,3], code=3, angle=90,
                  length=0.05, col="gray",pch=3);
           points(true_time1, true_ratio1, col = "black", pch=1);
@@ -609,13 +666,13 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
         res_precision = mean(abs(res)/true_ratio1)
         
         out2 = rbind(out2, c(res_absres, res_MSE, res_precision));
-                
-#        if(actPlot == TRUE){
-#          plot(true_time1, res, xlab = "Time",
-#               ylab = "Residual", ylim = c(-8e-4, 8e-4), xlim=c(0,max(true_time1)*1.1), type = "n",
-#               main = paste("Frequency cutoff", j,"-",gm, "gmode"));
-#          points(true_time1, res, col = "black", pch=1);
-#        }
+        
+        #        if(actPlot == TRUE){
+        #          plot(true_time1, res, xlab = "Time",
+        #               ylab = "Residual", ylim = c(-8e-4, 8e-4), xlim=c(0,max(true_time1)*1.1), type = "n",
+        #               main = paste("Frequency cutoff", j,"-",gm, "gmode"));
+        #          points(true_time1, res, col = "black", pch=1);
+        #        }
       } # end 'all(discFreq)'
       
     } # end loop
@@ -623,9 +680,9 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
     # colnames
     colnames(out1) = c("covpbb", "medBandWidth");
     colnames(out2) = c("absres", "MSE", "precision");
-
     
-
+    
+    
     
     R[[gm]] = list(covpbb = out1, residual = out2);
     
@@ -638,476 +695,119 @@ covpbb = function(data, mod, l=200, p=90, fs=16384, movGmode = 11,
   
 }
 
-# THIS FUNCTION MUST BE UPDATED
 
 ########################################################################
-repcovpbb = function(wvf, duration, ampl, fcut,
-                     mod, N, snr = NULL, movGmode = 11, um = 3, dm = 3,
-                     movBand = 5, timeGmode = NULL, l=200, p=90, fs=16384, limFreq=NULL,
-                     thruth_data){
-########################################################################  
-  # data : matrix (time, signal)
-  # mod  : lm object
-  # N    : number of replications
-  # ampl : distances (scalar or vector)
+compute_SNR = function(waveform, detector="aLIGO", asd=NULL, fcut=0, dist=10, pbOff=FALSE){
+  ########################################################################
+  fs=4096
   
-  if(length(ampl) == 1){
-    
-    out_cp = NULL;
-    out_bl = NULL;
-    
-    for(i in 1:N){
-      noisydata = data_generator(fs, duration, wvf, ampl, filtering = "HP", fcut=fcut, actPlot=FALSE);
-      noisydata = data.frame("V1"=noisydata$t,"V2"=noisydata$y);
-      if (is.null(limFreq)){
-        aux = covpbb(noisydata, mod, l, p, fs, um, dm, 
-                     thruth_data=thruth_data, actPlot = FALSE);
-      }else{        
-        aux = covpbb(noisydata, mod, l, p, fs, um, dm, 
-                     thruth_data=thruth_data, actPlot = FALSE);
-      }
-      out_cp = c(out_cp, aux$covpbb);
-      out_bl = c(out_bl, aux$medBandWidth);      
-    }
-    
-    out = list(covpbb = out_cp, medBandWidth = out_bl);
-    
-  }else if(length(ampl) > 1){
-    
-    out_cp = list();
-    out_bl = list();
-    
-    for(j in ampl){
-      print(j)
-      aux_cp = NULL; # to save coverage probabilities
-      aux_bl = NULL; # to save band widths
-      
-      for(i in 1:N){
-        
-        noisydata = data_generator(fs, duration, wvf, ampl = j, filtering = "HP", fcut=fcut, actPlot=FALSE);
-        noisydata = data.frame("V1"=noisydata$t,"V2"=noisydata$y);
-        
-        if (is.null(limFreq)){
-          aux = covpbb(noisydata, mod, l, p, fs, um, dm, 
-                       thruth_data=thruth_data, actPlot = FALSE);
-        }else{        
-          aux = covpbb1(noisydata, mod, l, p, fs, um, dm, 
-                        thruth_data=thruth_data, actPlot = FALSE, limFreq);
-        }
-        
-        #print(aux$covpbb)        
-        aux_cp = c(aux_cp, aux$covpbb);
-        aux_bl = c(aux_bl, aux$medBandWidth);
-        
-      }
-      if(is.null(snr)){
-        
-        out_cp[[paste(j)]] = aux_cp;
-        out_bl[[paste(j)]] = aux_bl;
-        
-      }else{
-        
-        out_cp[[paste(snr * j)]] = aux_cp;
-        out_bl[[paste(snr * j)]] = aux_bl;  
-        
-      }
-    }
-    
-    out = list(covpbb = out_cp, medBandWidth = out_bl);
+  n=length(waveform$hoft)
+  a = nextpow2(10*n)         #zero padding and rounding to the next power of 2
+  n2=2^a
+  
+  # Remove or not 0.100s after the bounce (set hoft values to 0)
+  if (pbOff == TRUE){
+    ext=which(waveform$time<0.1)
+    waveform$hoft[ext]=0
   }
   
-  return(out)
   
+  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
+  freq2[1]=0.001                 # to avoid plotting pb in logscale
+  freq1=freq2[1:int(n2/2)]       # one-sided frequency vector
+  
+  # Get the 1 sided PSD
+  if (detector == "ALIGO"){
+    psd=aLIGO_PSD_new(freq1, 1)
+  }else{
+    psd=PSD_fromfiles(freq1, 1, detector)
+  }
+  
+  if (!is.null(asd)){
+    psd = rep(asd*asd, length(freq1))
+  }
+  
+  vec=rep(0,n2)
+  for (i in 1:n){
+    vec[n2/4+i]=vec[n2/4+i]+waveform$hoft[i]*10./dist
+  }  
+  
+  hf=fft(vec)/sqrt(fs);          # normalisation wrt the sampling
+  
+  hf=hf[1:(n2/2)]                # The integral is performed over positive freqs
+  
+  hf=subset(hf,freq1-fcut>0)
+  psd=subset(psd,freq1-fcut>0)
+  freq1=subset(freq1, freq1-fcut>0)
+  
+  integrand=abs(hf*Conj(hf))
+  p=integrand/psd/fs
+  
+  snr=sqrt(4*trapz(freq1,p))
+  
+  plot (freq1, sqrt(freq1)*abs(hf), log="xy", type="l", xlab="Frequency", ylab="hchar", 
+        col="grey", xlim=c(1, fs/2), ylim=c(1e-24,1e-20), pch=1, panel.first = grid())
+  points(freq1,sqrt(psd), type="l", col="black",pch=2)
+  leg = c("sqrt(fs) x h~(f)", "ASD")
+  col = c("grey","black")
+  legend (x=1,y=6e-22,legend=leg,cex=.8,col=col,pch=c(1,2))
+  title(c("SNR:",snr))
+  return(snr)  
 }
 
 
-
-##########################
-### BAYESIAN functions ###
-##########################
-
-covpbbBayes = function(data, postSamples, l=200, p=90, fs=16384, movGmode = 11, 
-                       um = 3, dm = 3, movBand = 5, timeGmode = NULL,
-                       thruth_data, actPlot = FALSE, fmean = 0){
+########################################################################
+whiteNoise_from_SNR = function(waveform, SNR, fs=4096, fcut=0, dist=10, 
+                               actPlot = TRUE, main=NULL, pbOff=FALSE, verbose=FALSE){
+  ########################################################################
   
-  # The only difference with 'covpbb' function is how the predicted 
-  #  values are calculated.
+  # Compute psd to get the right SNR
+  n=length(waveform$hoft)
+  a=nextpow2(10*n)         #zero padding and rounding to the next power of 2
+  n2=2^a
+  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
+  freq1=freq2[1:int(n2/2)]
   
-  # data     : dataset as matrix (with no zeros [specPdgrm])
-  # mod      : model
-  # l        : interval length in spectrogram
-  # p        : overlaping percentage in spectrogram
-  # movGmode : number of steps to smooth estimated g-modes 
-  # um       : define upper neighborhood to find g-modes 
-  # dm       : define lower neighborhood to find g-modes
-  # movBand  : define the number of points to smooth the band
-  # timeGMode: time interval to define g-modes
-  # Oberganlinger_data: simulated R and M time evolution
-  # fmean: mean of frequencies used to generate the model
+  vec=rep(0,n2)
+  for (i in 1:n){
+    vec[n2/4+i]=vec[n2/4+i]+waveform$hoft[i]*10/dist
+  }  
   
-  # Compute true ratios
-  #true_ratios = Obergaunlinguer_data$Mpns / (Obergaunlinguer_data$Rpns^(2));
-  true_ratios = thruth_data$x
+  hf=fft(vec)/sqrt(fs);     # normalisation wrt the sampling
   
-  # spectrogram
-  r = specPdgrm(data$V2, data$V1, l = l, p = p, fs = fs, actPlot = FALSE, logPow = T,
-                zoomFreq=c(0,1)); # generating the spectrogram
+  hf=hf[1:(n2/2)]    # integral performed over positive frequencies
   
-  n     = length(data$V1);
-  # starting & ending points of the intervals used in the spectrogram
-  index = ints(n = n, l = l, p = p); # from psplinePsd 
+  hf=subset(hf,freq1-fcut>0);
+  freq1=subset(freq1, freq1-fcut>0);
   
-  # centred point for even "l"
-  mindx = index + cbind(rep(l/2 -1, dim(index)[1]), rep(-(l/2-1), dim(index)[1]));
-  # Ajusting data / #it can be directly taken from the 'data'
-  timedata = seq(from=data$V1[1], to=data$V1[n], length = n);
+  integrand=abs(hf*Conj(hf))
+  p=integrand/fs
+  psd=4*trapz(freq1,p)/SNR^2
   
-  # mean time (centred point) for our g-mode estimates
-  timefreq = apply(mindx, 1, function(x) mean(timedata[c(x[1], x[2])]) );
+  # Create Noise
+  X = rnorm(n, mean=0, sd=1);
+  XX = fft(X);
+  XXX = XX*sqrt(psd)*sqrt(fs);
+  Y = fft(XXX, inverse = TRUE);
+  Y = Re(Y)/n;
   
-  # g-modes
-  
-  if( !is.null(timeGmode)){
-    
-    # g-mode time range
-    
-    out = apply(as.matrix(timefreq), 1, 
-                function(x){
-                  if((x >= timeGmode[1]) & (x <= timeGmode[2])){
-                    return(TRUE);
-                  }else{
-                    return(FALSE);
-                  }
-                });
-    
-    timefreq = timefreq[out];
-    
-    r$x = r$x[out];   # discarding values out of g-mode range
-    r$z = r$z[out, ];
-    
+  for (i in 1:n){
+    Y[i] = Y[i] + waveform$hoft[i]*10/dist
   }
   
-  maxf = findGmodes(r, um=um, dm=dm);
-  maxf = movf(maxf, movGmode, median); # smoothing g-mode estimates
-  
-  cmaxf = maxf - fmean; # centred g-modes (SEE MODEL USED IN JAGS)
-  
-  xs =  rbind(rep(1, length = length(cmaxf)), cmaxf, cmaxf^2, cmaxf^3); 
-  
-  # postSamples = (a0, a1, a2, a3, b1); # postSample structure
-  postSamples = as.matrix(postSamples); # needed for matrix operations below
-  
-  # a0+ a1*(fnew[i]-mean(f))+a2*(fnew[i]-mean(f))^2+a3*(fnew[i]-mean(f))^3
-  mus = postSamples[,1:4] %*% xs; # means
-  
-  # standard deviations
-  sds = as.matrix(postSamples[,5], ncol=1) %*% t(as.matrix(maxf,ncol=1));
-  sds = sqrt(sds);
-  
-  # simulation from Normal(mus, sds)
-  n_maxf = length(maxf);
-  X      = apply(cbind(mus, sds), 1, function(x)
-    rnorm(n_maxf, mean = x[1:n_maxf], sd = x[-(1:n_maxf)]));
-  X      = t(X);
-  
-  # median, quantiles 0.025 & 0.975
-  pred = apply(X, 2, function(x) quantile(x ,probs = c(0.5,0.025,0.975)));
-  pred = t(pred);
-  
-  #pred[pred[,2] < 0, 2] = 0; # discarding negative values in CI
-  
-  ### generating band function ### 
-  
-  # interpolating lower bound for predicted values
-  fd = approxfun(x = timefreq, y = movf(pred[,2],n=movBand,median), method = "linear",
-                 yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
-  # interpolating upper bound for predicted values
-  fu = approxfun(x = timefreq, y = movf(pred[,3],n=movBand,median), method = "linear",
-                 yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
-  
-  # fd & fu use smooth confidence intervals by using "movf"
-  
-  aux = cbind(true_ratios,                    # true ratios
-              fd(Obergaunlinguer_data$time),  # lower band (using predicted ratios)
-              fu(Obergaunlinguer_data$time)); # upper band (using predicted ratios)
-  
-  # discarding the true values which are out of the range of the predicted values
-  
-  discL = which(is.na(aux[,2])); # left side
-  discR = which(is.na(aux[,3])); # right side
-  
-  disc  = unique(c(discL, discR)); 
-  
-  if(length(disc) != 0){
-    
-    aux = aux[-disc, ];
-    
-    trueRatioTime = Obergaunlinguer_data$time[-disc];
-    
+  if (verbose ==TRUE){
+    print(sprintf("Gaussian white noise on detector %s with mean %g and standard deviation %g",
+                  main, mean(Y), sd(Y)));
   }
   
-  out = NULL;
-  
-  if( !is.null(timeGmode)){
-    
-    # To test only true values inside g-mode time range
-    
-    out = apply(as.matrix(trueRatioTime), 1,
-                function(x){
-                  if((x >= timeGmode[1]) & (x <= timeGmode[2])){
-                    return(TRUE);
-                  }else{
-                    return(FALSE);
-                  }
-                });
-    
-    aux = aux[out, ];
-    
+  if (actPlot){
+    plot(waveform$time,Y,type='l',col='black',
+         xlab = "Time",ylab="Hoft",main=main)
+    points(waveform$time,waveform$hoft,type='l',col='red')
+    leg = c("Noisy signal", "Signal")
+    col = c("black","red")
+    legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,2))
   }
   
-  if(actPlot == TRUE){
-    
-    plot(Obergaunlinguer_data$time, true_ratios, 
-         ylim=c(min(pred[,2]),max(pred[,3])), xlab = "Time", ylab = "Ratio",
-         main = "Bayesian analysis");
-    arrows(timefreq, pred[,2], timefreq, pred[,3], 
-           code=3, angle=90, length=0.05, col="gray", pch = 3);
-    
-    points(Obergaunlinguer_data$time, true_ratios, col = "black",pch=1);
-    points(timefreq, pred[,1], col = "red", cex = pred[,1]/max(pred[,1])+ 0.3,pch=2);
-    
-    leg <- c("true ratio", "pred ","pred uncertainty")
-    col=c("black","red","gray")
-    legend(x=.25,y=0.0037,legend=leg,cex=.8,col=col,pch=c(1,2,3))
-    
-  }
-  
-  # testing if the true ratios are inside the bands
-  prop = apply(aux, 1, 
-               function(x){
-                 if((x[1]>= x[2]) && (x[1] <= x[3])){
-                   return(1);
-                 }else{
-                   return(0);
-                 }
-               });
-  
-  #aux[aux[,2]<0,2] = 0; # it replaces negative values in lower limit
-  
-  l = aux[,3] - aux[,2];
-  p = mean(prop);
-  
-  return(list(covpbb = p, medBandWidth = median(l)));
-  
-}
-
-
-repcovpbbBayes = function(data, postSamples, N, dists, snr = NULL, movGmode = 11, um = 3, dm=3,
-                          movBand = 5, timeGmode = NULL, l=200, p=90, fs=16384){
-  
-  # data : matrix (time, signal)
-  # mod  : lm object
-  # N    : number of replications
-  # dists: distances (scalar or vector)
-  
-  Fs   = fs;   # 16384; # sampling frequency
-  mean = 0.0;
-  std  = 1.0;
-  n    = dim(data)[1]; # 16384
-  
-  freq    = Fs*np.fft.fftfreq(n);  # two-sided frequency vector
-  psd2    = aLIGO_PSD(freq,2);     # two-sided PSD
-  newpsd2 = aLIGO_PSD_new(freq,2); # two-sided PSD              
-  
-  #ff     = freq[1:int(n/2)];    # one-sided frequency vector 
-  #psd    = aLIGO_PSD(ff,1);     # one-sided PSD              
-  #newpsd = aLIGO_PSD_new(ff,1); # one-sided PSD 
-  
-  noisydata = data;
-  
-  if(length(dists) == 1){
-    
-    out = NULL;
-    
-    newdata = data$V2 * dists;
-    
-    for(i in 1:N){
-      
-      # Generate noise
-      X   = rnorm(n, mean = mean, sd = std); # Gaussian white noise
-      XX  = sqrt(Fs) * fft(X) / (n*sqrt(n)); # FFT computing and normalization
-      XXX = XX*sqrt(newpsd2);                # Coloring
-      Y   = fft(XXX, inverse = TRUE);        # FFT inverse
-      Y   = Re(Y)*sqrt(n);
-      
-      # noisy data
-      noisydata$V2 = newdata + Y; # signal + noise
-      hpf = 50; # high pass filter
-      noisydata$V2 = ffilter(noisydata$V2, f = fs, from = hpf);
-   
-      out = c(out, covpbbBayes(noisydata, postSamples, l=l, p=p, fs=fs, movGmode = movGmode, 
-                               um = um, dm = dm, movBand = movBand, timeGmode = timeGmode));
-      
-    }
-    
-  }else if(length(dists) > 1){
-    
-    out = list();
-    
-    for(j in dists){
-      
-      print(j);
-      
-      aux = NULL;
-      
-      newdata = data$V2 * j;
-      
-      for(i in 1:N){
-        
-        # Generate noise
-        X   = rnorm(n, mean = mean, sd = std); # Gaussian white noise
-        XX  = sqrt(Fs) * fft(X) / (n*sqrt(n)); # FFT computing and normalization
-        XXX = XX*sqrt(newpsd2);                # Coloring
-        Y   = fft(XXX, inverse = TRUE);        # FFT inverse
-        Y   = Re(Y)*sqrt(n);
-        
-        # noisy data
-        noisydata$V2 = newdata + Y; # signal + noise
-        hpf = 50; # high pass filter
-        noisydata$V2 = ffilter(noisydata$V2, f = fs, from = hpf);
-        
-        aux = c(aux, covpbbBayes(noisydata, postSamples, l=l, p=p, fs=fs, movGmode = movGmode, 
-                                 um = um, dm = dm, movBand = movBand, timeGmode = timeGmode));
-        
-      }
-      
-      if(is.null(snr)){
-        
-        out[[paste(j)]] = aux;
-        
-      }else{
-        
-        out[[paste(snr * j)]] = aux;  
-        
-      }
-    }
-  }
-  
-  return(out)
-  
-}
-
-plotOneSim = function(data, mod = NULL, postSamples=NULL, dist=1, l=200, p=90,
-                      fs=16384, movGmode = 11, um = 3, dm = 3, movBand = 5,
-                      timeGmode = NULL, filterHz = NULL){
- 
-  # data: original data. The functions injects coloured noise
-
-  Fs   = fs; # 16384; # sampling frequency
-  mean = 0.0;
-  std  = 1.0;
-  n    = dim(data)[1]; # 16384
- 
-  freq    = Fs*fftfreq(n);  # two-sided frequency vector
-  psd2    = aLIGO_PSD(freq,2);     # two-sided PSD
-  newpsd2 = aLIGO_PSD_new(freq,2); # two-sided PSD             
-  
-  ff     = freq[1:int(n/2)];    # one-sided frequency vector
-  psd    = aLIGO_PSD(ff,1);     # one-sided PSD             
-  newpsd = aLIGO_PSD_new(ff,1); # one-sided PSD
-  
-  noisydata = data.frame("V1"=data$time,"V2"=data$hoft);
-  noisydata$V2 = noisydata$V2 * dist;
-
-  out = NULL;
-
-  # Generate noise
-  X   = rnorm(n, mean = mean, sd = std); # Gaussian white noise
-  XX  = sqrt(Fs) * fft(X) / (n*sqrt(n)); # FFT computing and normalization
-  XXX = XX*sqrt(newpsd2);                # Coloring
-  Y   = fft(XXX, inverse = TRUE);        # FFT inverse
-  Y   = Re(Y)*sqrt(n);
-
-  # noisy data
-  noisydata$V2 = noisydata$V2 + Y; # signal + noise
- 
-  if(!is.null(filterHz)){
-    
-    noisydata$V2 = ffilter(noisydata$V2, f = fs, from = filterHz);
-   
-  }
- 
-  r = specPdgrm(noisydata$V2, l = l, p = p, fs = fs, actPlot = FALSE, logPow = T,
-                zoomFreq=c(0,1)); # generating the spectrogram
- 
-  n     = length(noisydata$V1);
-  # starting & ending points of the intervals used in the spectrogram
-  index = ints(n = n,l = l, p = p); # from psplinePsd
- 
-  # centred point for even "l"
-  mindx = index + cbind(rep(l/2 -1, dim(index)[1]), rep(-(l/2-1), dim(index)[1]));
-  # Ajusting data
-  timedata = seq(from=noisydata$V1[1], to=noisydata$V1[n], length = n);
- 
-  # mean time (centred point) for our g-mode estimates
-  timefreq = apply(mindx, 1, function(x) mean(timedata[c(x[1], x[2])]) );
-
-  # g-modes
- 
-  if( !is.null(timeGmode) ){
-   
-    #timeGmode = data0[c(1,length(data0[,1])), 1];
-   
-    out = apply(as.matrix(timefreq), 1,
-                function(x){
-                  if((x >= timeGmode[1]) & (x <= timeGmode[2])){
-                    return(TRUE);
-                  }else{
-                    return(FALSE);
-                  }
-                });
- 
-    #maxf     = maxf[out];
-    timefreq = timefreq[out];
-   
-  }
- 
-  r$x = r$x[out];
-  r$z = r$z[out, ];
- 
-  maxf = findGmodes(r, um=um, dm=dm);
-  maxf = movf(maxf, movGmode, median); # smoothing g-mode estimates
-  points(timefreq,maxf, col = 'green')
- 
-  if( class(mod) == "lm"){
-   
-    # prediction
-    new   = data.frame(f = maxf);
-    pred  = predict(mod, new, interval = "prediction"); # predictions
-    title = "Frequentist analysis";
-   
-  }else if(class(postSamples) == "data.frame"){
-   
-    # prediction
-    aux  = as.matrix(postSamples[,1:3]) %*% t(cbind(maxf, maxf^2, maxf^3));
-   
-    aux1 = apply(aux,2,median);
-   
-    sdb  = 1.96 * sqrt(maxf * median(postSamples[,4]));
-   
-    pred = cbind(apply(aux,2,median), aux1 - sdb, aux1 + sdb);
-   
-    title = "Bayesian analysis";
-  }
- 
-  ### PLOT ###
- 
-  yaux = c(true_ratios, pred[,2:3]);
-  plot(Obergaunlinguer_data$time, true_ratios, main = paste(title), xlab = "Time",
-       ylab = "Ratio", ylim = c(min(yaux), max(yaux)), type = "n");
-  arrows(timefreq, pred[,2], timefreq, pred[,3], code=3, angle=90,
-         length=0.05, col="gray");
-  points(Obergaunlinguer_data$time, true_ratios, col = "black");
-  points(timefreq, pred[,1], col = "red", cex = pred[,1]/max(pred[,1])+ 0.3);
- 
+  return(list(hoft=waveform$hoft,noisy=Y,psd=psd))
 }

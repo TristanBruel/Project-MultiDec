@@ -55,9 +55,9 @@ location_det = function(l, lambda, h){
 orientation_arm = function(l, lambda, az, polar){
   # Inputs : orientation angles of one arm in the detector frame
   # Outputs : unit orientation vectors in the earth fixed frame
-  o1 = -cos(az)*cos(polar)*sin(lambda)-sin(az)*cos(polar)*cos(lambda)*sin(l)+sin(polar)*cos(l)*cos(lambda)
-  o2 = cos(az)*cos(polar)*cos(lambda)-sin(az)*cos(polar)*sin(lambda)*sin(l)+sin(polar)*cos(l)*sin(lambda)
-  o3 = sin(az)*cos(polar)*cos(l)+sin(polar)*sin(l)
+  o1 = -sin(az)*cos(polar)*sin(lambda)-cos(az)*cos(polar)*cos(lambda)*sin(l)+sin(polar)*cos(l)*cos(lambda)
+  o2 = sin(az)*cos(polar)*cos(lambda)-cos(az)*cos(polar)*sin(lambda)*sin(l)+sin(polar)*cos(l)*sin(lambda)
+  o3 = cos(az)*cos(polar)*cos(l)+sin(polar)*sin(l)
   return(c(o1,o2,o3))
 }
 
@@ -70,9 +70,10 @@ earthFrame_to_detector = function(l, lambda, h, az1, az2, polar1, polar2){
   return(list(loc=loc,vectors_arm1=arm1,vectors_arm2=arm2))
 }
 
-# Detectors parameters  
-dets = read.csv("detectors_params.csv", sep=",", stringsAsFactors=FALSE, header=TRUE)
 
+# Detectors parameters  
+dets = read.csv("detectors_params.csv", sep=",", 
+                stringsAsFactors=FALSE, header=TRUE)
 
 ### Response for gravitational wave ###
 #######################################
@@ -86,8 +87,9 @@ grav_response = function(dec, ra, t, pol=0, detector){
   #
   # Output : time of arrival at a given detector
   
-  if (!(detector %in% c("LHO","LLO","VIRGO"))){
-    stop("detector must be LHO, LLO or VIRGO")
+  if (!(detector %in% dets$name)){
+    print((c("detector must be in ",dets$name)))
+    return()
   }
   
   index=which(dets$name == detector)
@@ -106,8 +108,8 @@ grav_response = function(dec, ra, t, pol=0, detector){
   
   #Sky angles
   psi = pol
-  phi = ra*(2*pi/24) - GPS_to_GMST(t)
-  theta = pi/2 - dec*(2*pi/360)
+  phi = ra*pi/12 - GPS_to_GMST(t)
+  theta = pi/2 - dec*pi/180
   
   grav_tsr = grav_tensor(psi,theta,phi)
   eplus = grav_tsr$eplus
@@ -135,8 +137,9 @@ time_delay = function(dec, ra, t, detector){
   #
   # Outputs : - (algebraic) time taken for the wave to reach the center of the earth
   
-  if ((detector != "LHO") && (detector != "LLO") && (detector != "VIRGO")){
-    stop("detector must be LHO, LLO or VIRGO")
+  if (!(detector %in% dets$name)){
+    print((c("detector must be in ",dets$name)))
+    return()
   }
   
   index=which(dets$name == detector)
@@ -152,8 +155,8 @@ time_delay = function(dec, ra, t, detector){
   
   loc = detector_frame$loc
   
-  theta = pi/2 - dec*(2*pi/360)
-  phi = ra*(2*pi/24) - GPS_to_GMST(t)
+  theta = pi/2 - dec*pi/180
+  phi = ra*pi/12 - GPS_to_GMST(t)
   # source position unit vector
   e_sky = matrix(c(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta)))
   
@@ -172,9 +175,7 @@ GPS_to_GMST = function(time){
   w_E = 2*pi*(1/365.2425+1)/86400 # Earth sidereal rotation speed (rad/s)
   gps2000 = 630720013.0 # GPS time for 01/01/2000 00:00:00 UTC
   s0  = (6.0 + 39.0/60.0 + 51.251406103947375/3600)*pi/12 # Sidereal time at gps2000 (rad)
-  
+#  s0 = 1.74479315829
   GMST = (w_E*(time-gps2000)+s0)%%(2*pi)
-  
   return(GMST)
 }
-

@@ -3,8 +3,8 @@ library ("signal")
 library ("seewave")
 library ("psd")
 library ("pracma")
+library("plyr")
 
-source("multiDec_algebra.R")
 
 ##################################
 ### Multi detection simulation ###
@@ -13,7 +13,8 @@ source("multiDec_algebra.R")
 
 ########################################################################
 signal_multiDec = function(dec=-65, ra=8, t=1126259462.0, 
-                           signal="KURODA_TM1_H_resampled.dat", 
+                           signal="KURODA_TM1_H_resampled.dat",
+                           detectors=c("LHO","LLO","VIR"),
                            verbose=TRUE,actPlot=TRUE){
   ######################################################################
   # Inputs :  sky position of the source
@@ -26,80 +27,77 @@ signal_multiDec = function(dec=-65, ra=8, t=1126259462.0,
   # Outputs : measured time series for the 3 detectors LHO, LLO and VIRGO
   
   folder="Waveforms/"
-  fs_orig=4096
   
   gw_filename=paste(folder,signal,sep="")
   sXX = read.table(gw_filename) # V1 time, V2 hplus, V3 hcross
   colnames(sXX) = c ("time","hplus","hcross")
+  fs_orig = round(1/(sXX$time[2]-sXX$time[1]))
   n = length(sXX$time)
   duration=(n-1)/fs_orig
   
   if (verbose==TRUE){
     print(gw_filename)
-    print(sprintf("Number of samples at 24414 Hz: %g", n))
+    print(sprintf("Number of samples at %g Hz: %g",fs_orig, n))
     print(sprintf("Duration : %gs", duration))
   }
   
-  # gravitational response for each detector
-  coeff_LHO = grav_response(dec,ra,t,0,"LHO")
-  coeff_LLO = grav_response(dec,ra,t,0,"LLO")
-  coeff_VIR = grav_response(dec,ra,t,0,"VIRGO")
-  
-  signal_LHO = rep(0,n)
-  signal_LLO = rep(0,n)
-  signal_VIR = rep(0,n)
-  
-  for (i in 1:n){
-    signal_LHO[i]=coeff_LHO$Fplus*sXX$hplus[i] + coeff_LHO$Fcross*sXX$hcross[i]
-    signal_LLO[i]=coeff_LLO$Fplus*sXX$hplus[i] + coeff_LLO$Fcross*sXX$hcross[i]
-    signal_VIR[i]=coeff_VIR$Fplus*sXX$hplus[i] + coeff_VIR$Fcross*sXX$hcross[i]
+  m=length(detectors)
+  res=list()
+  for (k in 1:m){
+    # gravitational response for each detector
+    coeff = grav_response(dec,ra,t,0,detectors[k])
+    
+    signal= rep(0,n)
+    
+    for (j in 1:n){
+      signal[j]=coeff$Fplus*sXX$hplus[j] + coeff$Fcross*sXX$hcross[j]
+    }
+    
+    times=sXX$time-time_delay(dec,ra,t,detectors[k])
+    
+    wvf=data.frame("time"=times,"hoft"=signal)
+    
+    # Plot
+    if (actPlot == TRUE){
+      plot(wvf$time,wvf$hoft,type='l',xlab="Time [s]",ylab="Hoft",
+           main=detectors[k])
+    }
+    
+    res$wvf=wvf
+    res=rename(res,c("wvf"=sprintf("wvf_%s",detectors[k])))
   }
+  res$duration = duration
   
   # Time delays between the arrivals at each detector
-  if (verbose==TRUE){
-    detectors = c("LHO","LLO","VIRGO")
-    delays = c(time_delay(dec, ra, t, "LHO"), time_delay(dec, ra, t, "LLO"), 
-               time_delay(dec, ra, t, "VIRGO"))
-    first = which(delays==max(delays))
-    third = which(delays==min(delays))
-    second = which(!(c(1,2,3)%in%c(first,third)))
-    ## WARNING ## : special cases when 2 detectors measure a signal at the exact same time
-    dt_second = delays[first]-delays[second]
-    dt_third = delays[first]-delays[third]
-  
-    print(sprintf("Signal detected first at %s",detectors[first]))
-    print(sprintf("Then at %s with a %fs delay",detectors[second],dt_second))
-    print(sprintf("And finally at %s with a %fs delay",detectors[third],dt_third))
-  }
-  
-  times_H=sXX$time-time_delay(dec,ra,t,"LHO")
-  times_L=sXX$time-time_delay(dec,ra,t,"LLO")
-  times_V=sXX$time-time_delay(dec,ra,t,"VIRGO")
-  
-  wvf_LHO=data.frame("time"=times_H,"hoft"=signal_LHO)
-  wvf_LLO=data.frame("time"=times_L,"hoft"=signal_LLO)
-  wvf_VIR=data.frame("time"=times_V,"hoft"=signal_VIR)
-  
-  
-  # Plot
-  if (actPlot == TRUE){
-    plot(wvf_LHO$time,wvf_LHO$hoft,type='l',xlab="Time [s]",ylab="Hoft",main="LHO")
-    plot(wvf_LLO$time,wvf_LLO$hoft,type='l',xlab="Time [s]",ylab="Hoft",main="LLO") 
-    plot(wvf_VIR$time,wvf_VIR$hoft,type='l',xlab="Time [s]",ylab="Hoft",main="VIRGO") 
-  }
-  
-  return(list(wvf_LHO=wvf_LHO,wvf_LLO=wvf_LLO,wvf_VIR=wvf_VIR,duration=duration))
+  #if (verbose==TRUE){
+  #  delays = rep(0,m);
+  #  for (i in 1:m){
+  #    delays[i] = c(time_delay(dec, ra, t, detectors[i]))
+  #  }
+  #  first = which(delays==max(delays))
+  #  third = which(delays==min(delays))
+  #  second = which(!(c(1,2,3)%in%c(first,third)))
+  #  ## WARNING ## : special cases when 2 detectors measure a signal at the exact same time
+  #  dt_second = delays[first]-delays[second]
+  #  dt_third = delays[first]-delays[third]
+    
+  #  print(sprintf("Signal detected first at %s",detectors[first]))
+  #  print(sprintf("Then at %s with a %fs delay",detectors[second],dt_second))
+  #  print(sprintf("And finally at %s with a %fs delay",detectors[third],dt_third))
+  #}
+  return(res)
 }
 
 
 ########################################################################
-data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR, 
-                          ampl=0, detector="aLIGO", filter="prewhiten", setseed=0,
-                           actPlot=TRUE, verbose=TRUE){
+data_multiDec = function (fs=4096, wvfs, duration, ampl=0, 
+                          detectors=c("LHO","LLO","VIR"), 
+                          filter="prewhiten", setseed=0,
+                          actPlot=TRUE, verbose=TRUE){
   ########################################################################
   # Inputs:   fs: sampling frequency
   #           duration: duration (in second) of the output time serie
-  #           wvf: dataframe (time=time, hoft=h(t)) that contains the signal waveform sampled at fs
+  #           wvfs: list of dataframes (time=time, hoft=h(t)) that contain the signal waveforms sampled at fs
   #           ampl: multiplication factor to change the source distance
   #           detector: detector name
   #           filter: name of the method
@@ -117,188 +115,104 @@ data_multiDec = function (fs=4096, duration, wvf_LHO, wvf_LLO, wvf_VIR,
   #           data_V
   
   n=duration*fs+1
-  wvf_size_H=length(wvf_LHO$hoft)
-  wvf_size_L=length(wvf_LLO$hoft)
-  wvf_size_V=length(wvf_VIR$hoft)
   
-  if ((n<wvf_size_H) || (n<wvf_size_L) || (n<wvf_size_V)){
-    print(sprintf("data_generator:the signal waveform duration is larger than %f", duration))
-    return()
-  }
-  
-  # The output vector will be 2 times larger than n
-  factor=2
-  
-  # Noise LHO
-  data=noise_generator(factor,fs, duration, detector, setseed=setseed, filter=FALSE,
-                       actPlot=FALSE, verbose=FALSE)
-  
-  Y_LHO=data$x
-  psd_LHO=data$psd           # 2 sided PSD
-  n_data=length(Y_LHO)     # factor x n
-
-  # Noise LLO
-  data=noise_generator(factor,fs, duration, detector, setseed=setseed, filter=FALSE,
-                       actPlot=FALSE, verbose=FALSE)
-  Y_LLO=data$x
-  psd_LLO=data$psd
-  
-  # Noise VIRGO
-  data=noise_generator(factor,fs, duration, detector, setseed=setseed, filter=FALSE,
-                       actPlot=FALSE, verbose=FALSE)
-  Y_VIR=data$x
-  psd_VIR=data$psd
-  
-  if (verbose==TRUE){
-    print(sprintf("data_generator:size of the output: %d", n))
-    print(sprintf("data_generator:size of the noise : %d", n_data))
-    print(sprintf("data_generator:size of the LHO signal: %d", wvf_size_H))
-    print(sprintf("data_generator:size of the LLO signal: %d", wvf_size_L))
-    print(sprintf("data_generator:size of the VIRGO signal: %d", wvf_size_V))
-    print(sprintf("data_generator:amplitude of the signal: %f", ampl))
-  }
-  
-  # Signal addition (centered at the middle of the data vector 
-  # to avoid filtering leakage at the beginning and end).
-  ind1_H=floor((n_data-wvf_size_H)/2)
-  ind1_L=floor((n_data-wvf_size_L)/2)
-  ind1_V=floor((n_data-wvf_size_V)/2)
-  
-  for (i in 1:wvf_size_H){
-    Y_LHO[ind1_H+i]=Y_LHO[ind1_H+i]+ampl*wvf_LHO$hoft[i]
-  }
-  for (i in 1:wvf_size_L){
-    Y_LLO[ind1_L+i]=Y_LLO[ind1_L+i]+ampl*wvf_LLO$hoft[i]
-  }
-  for (i in 1:wvf_size_V){
-    Y_VIR[ind1_V+i]=Y_VIR[ind1_V+i]+ampl*wvf_VIR$hoft[i]
-  }
-  
-  # filter the time series if requested
-  if (filter != FALSE){
-    YY_H=filtering(Y_LHO, fs, filter, psd_LHO, verbose)
-    YY_L=filtering(Y_LLO, fs, filter, psd_LLO, verbose)
-    YY_V=filtering(Y_VIR, fs, filter, psd_VIR, verbose)
-  }else{
-    YY_H=Y_LHO
-    YY_L=Y_LLO
-    YY_V=Y_VIR
-  }
-  
-  # generate a time series
-  T_H = seq(1, n_data, by = 1)
-  T_L = seq(1, n_data, by = 1)
-  T_V = seq(1, n_data, by = 1)
-  
-  # select the original data size
-  Tf_H = seq(1, n, by = 1)
-  Tf_L = seq(1, n, by = 1)
-  Tf_V = seq(1, n, by = 1)
-  
-  for (i in 1:n){
-    Tf_H[i]=wvf_LHO$time[i]
-    Tf_L[i]=wvf_LLO$time[i]
-    Tf_V[i]=wvf_VIR$time[i]
-  }
-  
-  T_wvf_H=seq(1,wvf_size_H,by=1)
-  T_wvf_L=seq(1,wvf_size_L,by=1)
-  T_wvf_V=seq(1,wvf_size_V,by=1)
-  for (i in 1:wvf_size_H){
-    T_wvf_H[i]=wvf_LHO$time[i]
-  }
-  for (i in 1:wvf_size_L){
-    T_wvf_L[i]=wvf_LLO$time[i]
-  }
-  for (i in 1:wvf_size_V){
-    T_wvf_V[i]=wvf_VIR$time[i]
-  }
-  
-  Yf_H = seq(1, n, by = 1)
-  Yf_L = seq(1, n, by = 1)
-  Yf_V = seq(1, n, by = 1)
-  YYf_H = seq(1, n, by = 1)
-  YYf_L = seq(1, n, by = 1)
-  YYf_V = seq(1, n, by = 1)
-  
-  for (i in 1:n){
-    Yf_H[i]=Y_LHO[ind1_H+i]
-    Yf_L[i]=Y_LLO[ind1_L+i]
-    Yf_V[i]=Y_VIR[ind1_V+i]
-    YYf_H[i]=YY_H[ind1_H+i]
-    YYf_L[i]=YY_L[ind1_L+i]
-    YYf_V[i]=YY_V[ind1_V+i]
-  }
-  
-  if (actPlot==TRUE){
-    if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
-      # Plot for LHO
-      plot(T_H, Y_LHO, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Sample",ylab="Hoft",main="LHO")
-      points(T_H, YY_H, col="red", type="l", pch=2);        # (noise + signal) filtered 
-      leg = c("noise+signal", "(noise+signal) filtered")
-      col = c("black","red")
-      legend (x=T_H[1]*1.1,y=max(Y_LHO)*.9,legend=leg,cex=.8,col=col,pch=c(1,2))
-      
-      plot(Tf_H, Yf_H, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Time [s]",ylab="Hoft", main="LHO")
-      points(Tf_H, YYf_H, col="red", type="l", pch=2);          # (noise + signal) filtered
-      points(T_wvf_H,(wvf_LHO$hoft)*ampl,col="green",type="l",pch=3);  # signal only
-      
-      leg = c("noise", "(noise+signal) filtered", "signal only")
-      col = c("black","red","green")
-      legend (x=Tf_H[1]*1.1,y=max(Yf_H)*.9,legend=leg,cex=.8,col=col,pch=c(1,3))
-      
-      # Plot for LLO
-      plot(T_L, Y_LLO, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Sample",ylab="Hoft",main="LLO")
-      points(T_L, YY_L, col="red", type="l", pch=2);        # (noise + signal) filtered 
-      leg = c("noise+signal", "(noise+signal) filtered")
-      col = c("black","red")
-      legend (x=T_L[1]*1.1,y=max(Y_LLO)*.9,legend=leg,cex=.8,col=col,pch=c(1,2))
-      
-      plot(Tf_L, Yf_L, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Time [s]",ylab="Hoft", main="LLO")
-      points(Tf_L, YYf_L, col="red", type="l", pch=2);          # (noise + signal) filtered
-      points(T_wvf_L,(wvf_LLO$hoft)*ampl,col="green",type="l",pch=3);  # signal only
-      
-      leg = c("noise", "(noise+signal) filtered", "signal only")
-      col = c("black","red","green")
-      legend (x=Tf_L[1]*1.1,y=max(Yf_L)*.9,legend=leg,cex=.8,col=col,pch=c(1,3))
-      
-      # Plot for VIRGO
-      plot(T_V, Y_VIR, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Sample",ylab="Hoft",main="VIRGO")
-      points(T_V, YY_V, col="red", type="l", pch=2);        # (noise + signal) filtered 
-      leg = c("noise+signal", "(noise+signal) filtered")
-      col = c("black","red")
-      legend (x=T_V[1]*1.1,y=max(Y_VIR)*.9,legend=leg,cex=.8,col=col,pch=c(1,2))
-      
-      plot(Tf_V, Yf_V, col="black", type="l", pch=1, panel.first = grid(), 
-           xlab="Time [s]",ylab="Hoft", main="VIRGO")
-      points(Tf_V, YYf_V, col="red", type="l", pch=2);          # (noise + signal) filtered
-      points(T_wvf_V,(wvf_VIR$hoft)*ampl,col="green",type="l",pch=3);  # signal only
-      
-      leg = c("noise", "(noise+signal) filtered", "signal only")
-      col = c("black","red","green")
-      legend (x=Tf_V[1]*1.1,y=max(Yf_V)*.9,legend=leg,cex=.8,col=col,pch=c(1,3))
-      
-    }else{
-      plot (Tf_H, Yf_H, type="l", col="black", main="LHO")
-      legend (x=Tf_H[1]*1.1, y=max(Yf_H)*.9, legend="noise+signal")
-      
-      plot (Tf_L, Yf_L, type="l", col="black", main="LLO")
-      legend (x=Tf_L[1]*1.1, y=max(Yf_L)*.9, legend="noise+signal")
-      
-      plot (Tf_V, Yf_V, type="l", col="black", main="VIRGO")
-      legend (x=Tf_V[1]*1.1, y=max(Yf_V)*.9, legend="noise+signal")
+  m=length(detectors)
+  res=list()
+  for (k in 1:m){
+    wvf=wvfs[[k]]
+    wvf_size=length(wvf$hoft)
+    
+    if (n<wvf_size){
+      print(sprintf("data_generator: signal waveform duration larger than %f", duration))
+      return()
     }
+    
+    # The output vector will be 2 times larger than n
+    factor=2
+    
+    # Noise LHO
+    data=noise_generator(factor,fs, duration, detector="aLIGO", setseed=setseed, 
+                         filter=FALSE, actPlot=FALSE, verbose=FALSE)
+    
+    Y=data$x
+    psd=data$psd        # 2 sided PSD
+    n_data=length(Y)     # factor x n
+    
+    if (verbose==TRUE){
+      print(sprintf("data_generator:size of the output: %d", n))
+      print(sprintf("data_generator:size of the noise : %d", n_data))
+      print(sprintf("data_generator:size of the %s signal: %d", detectors[k], wvf_size))
+      print(sprintf("data_generator:amplitude of the signal: %f", ampl))
+    }
+    
+    # Signal addition (centered at the middle of the data vector 
+    # to avoid filtering leakage at the beginning and end).
+    ind1=floor((n_data-wvf_size)/2)
+    
+    for (i in 1:wvf_size){
+      Y[ind1+i]=Y[ind1+i]+ampl*wvf$hoft[i]
+    }
+    
+    # filter the time series if requested
+    if (filter != FALSE){
+      YY=filtering(Y, fs, filter, psd, verbose)
+    }else{
+      YY=Y
+    }
+    
+    # generate a time series
+    T = seq(1, n_data, by = 1)
+    
+    # select the original data size
+    Tf = seq(1, n, by = 1)
+    
+    for (i in 1:n){
+      Tf[i]=wvf$time[i]
+    }
+    
+    T_wvf=seq(1,wvf_size,by=1)
+    
+    for (i in 1:wvf_size){
+      T_wvf[i]=wvf$time[i]
+    }
+    
+    Yf = seq(1, n, by = 1)
+    YYf = seq(1, n, by = 1)
+    
+    for (i in 1:n){
+      Yf[i]=Y[ind1+i]
+      YYf[i]=YY[ind1+i]
+    }
+    
+    if (actPlot==TRUE){
+      if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
+        # Plot for LHO
+        plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
+             xlab="Sample",ylab="Hoft",main=detectors[k])
+        points(T, YY, col="red", type="l", pch=2);        # (noise + signal) filtered 
+        leg = c("noise+signal", "(noise+signal) filtered")
+        col = c("black","red")
+        legend (x=T[1]*1.1,y=max(Y)*.9,legend=leg,cex=.8,col=col,pch=c(1,2))
+        
+        plot(Tf, Yf, col="black", type="l", pch=1, panel.first = grid(), 
+             xlab="Time [s]",ylab="Hoft", main=detectors[k])
+        points(Tf, YYf, col="red", type="l", pch=2);          # (noise + signal) filtered
+        points(T_wvf,(wvf$hoft)*ampl,col="green",type="l",pch=3);  # signal only
+        
+        leg = c("noise", "(noise+signal) filtered", "signal only")
+        col = c("black","red","green")
+        legend (x=Tf[1]*1.1,y=max(Yf)*.9,legend=leg,cex=.8,col=col,pch=c(1,3))
+      
+      }else{
+        plot (Tf, Yf, type="l", col="black", main=detectors[k])
+        legend (x=Tf[1]*1.1, y=max(Yf)*.9, legend="noise+signal")
+      }
+    }
+  res$data=data.frame(t=Tf,x=Yf,y=YYf)
+  res=rename(res,c("data"=sprintf("data_%s",detectors[k])))
   }
   
-  data_H = data.frame(t=Tf_H,x=Yf_H,y=YYf_H)
-  data_L = data.frame(t=Tf_L,x=Yf_L,y=YYf_L)
-  data_V = data.frame(t=Tf_V,x=Yf_V,y=YYf_V)
-  return(list(data_H=data_H,data_L=data_L,data_V=data_V))
+  return(res)
   
 }
 
