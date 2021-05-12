@@ -5,6 +5,8 @@ library ("psd")
 library ("pracma")
 library("plyr")
 
+source("multiDec_algebra.R")
+
 
 ##################################
 ### Multi detection simulation ###
@@ -12,10 +14,10 @@ library("plyr")
 
 
 ########################################################################
-signal_multiDec = function(dec=-65, ra=8, t=1126259462.0, 
+signal_multiDec = function(dec=30, ra=6, t=1302220800, 
                            signal="KURODA_TM1_H_resampled.dat",
                            detectors=c("LHO","LLO","VIR"),
-                           verbose=TRUE,actPlot=TRUE){
+                           verbose=FALSE,actPlot=FALSE){
   ######################################################################
   # Inputs :  sky position of the source
   #               declination in ° and right ascension in hours
@@ -93,7 +95,7 @@ signal_multiDec = function(dec=-65, ra=8, t=1126259462.0,
 data_multiDec = function (fs=4096, wvfs, duration, ampl=0, 
                           detectors=c("LHO","LLO","VIR"), 
                           filter="prewhiten", setseed=0,
-                          actPlot=TRUE, verbose=TRUE){
+                          actPlot=FALSE, verbose=FALSE){
   ########################################################################
   # Inputs:   fs: sampling frequency
   #           duration: duration (in second) of the output time serie
@@ -233,6 +235,8 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   #
   # Output:   d$t: time vector
   #           d$x: noise
+  #           d$y: filtered noise
+  #           d$psd: psd
   ########################################################################  
   
   if (duration < 10){
@@ -257,7 +261,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     psd=aLIGO_PSD_new(freq2, 2)
   }
   else{
-    psd=PSD_fromfiles(freq2, 2, detector, verbose)
+    psd=PSD_fromfiles(freq2, 2, detector, actPlot)
   }
   
   if (setseed >0){
@@ -292,7 +296,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   Tf = seq(1, n, by = 1)
   
   for (i in 1:n){
-    Tf[i]=i/fs
+    Tf[i]=(i-1)/fs
   }
   
   if (actPlot==TRUE){
@@ -328,7 +332,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     lines(freq1, sqrt(2*psd[1:int(n/2)]), col="red", pch=3)         # PSD is 2 sided PSD
     
     legend_str=c("col noise FT", "col noise spectrun", "ASD model", "filtered FT", "filtered spectrum")
-    legend (x=100, y=min(abs(tail(YFT,-1)))*50000, legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))   
+    legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))   
     
     if (verbose==TRUE){
       s1 <- sqrt(2*trapz(fs*psdest$freq[1:int(n/2)], psdest$spec[1:int(n/2)]/fs))
@@ -346,7 +350,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
 }
 
 ########################################################################
-PSD_fromfiles=function(f, type, detector, verbose=FALSE){
+PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   ########################################################################
   # Sensitivity curves for advanced LIGO, advanced Virgo and KAGRA.
   # [Add refs here]
@@ -438,14 +442,14 @@ PSD_fromfiles=function(f, type, detector, verbose=FALSE){
                      length(asd_1sided), n/2))
     }
     
-    for(i in 1:(int(n/2))){
+    
+    asd[1]=asd_1sided[1];
+    for(i in 2:(int(n/2))){
       asd[i]=asd_1sided[i];
       
       # Wraparound frequency: f=0 is the first element (i=1), 
       # and all elements are symetric around index n/2+1
-      if(i>1){
-        asd[n+2-i]=asd[i]
-      }
+      asd[n+2-i]=asd[i]
     }  
     asd[n/2+1]=asd_func(abs(f[int(n/2)+1]))
     
@@ -460,10 +464,10 @@ PSD_fromfiles=function(f, type, detector, verbose=FALSE){
     }
   }
   
-  if (verbose==TRUE){
+  if (actPlot==TRUE){
     fN=4096
     if (type==1){
-      plot(f,psd,log="xy",col="blue",xlim=c(1, fN/2),pch=2)
+      plot(f,psd,log="y",col="blue",xlim=c(1, fN/2),pch=2)
       points(data$V1,sens*sens,col="red",type="l",pch=1)
     }else{
       plot(f,psd,log="y",col="blue",xlim=c(1, fN/2),pch=2)
@@ -499,7 +503,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
   }
   
   n=length(X)
-  duration=n/fs
+  duration=(n-1)/fs
   
   # compute noise sigma 
   freq2=fs*fftfreq(n)          # two-sided frequency vector
@@ -695,4 +699,30 @@ aLIGO_PSD_new = function(f,type){
     #    output=shifter(output,-1)  # No more needed after correction 4 lines above
   }
   return(output);
+}
+
+
+### Compute average correlation coefficient between two signals ###
+
+compute_cor = function(h1,h2,psd,fs=4096){
+  if (length(h1) != length(h2)){
+    print("Signals must be of same length")
+  }
+  T=length(h1);
+  freq=fs*fftfreq(2*T)
+  freq[1]=0.001
+  freq=freq[1:T]   # frequencies used to sample the fourier series
+  
+  N=100   # number of repetitions to get the average correlation value
+  r=rep(0,N);
+  for (n in 1:N){
+    integrand=(Conj(h1)*h2+h1*Conj(h2))/psd
+    inner_p=Re(trapz(freq,integrand))
+    
+    norm1=Re(trapz(freq,2*abs(h1)^2/psd))
+    norm2=Re(trapz(freq,2*abs(h2)^2/psd))
+    
+    r[n] = inner_p/sqrt(norm1*norm2);
+  }
+  return(mean(r))
 }
