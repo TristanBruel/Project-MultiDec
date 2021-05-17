@@ -14,3 +14,7 @@ run projet.R to generate a signal, compute noisy and filtered data in the 3 dete
 * [Necula, Klimenko & Mitselmakher "Transient analysis with fast Wilson-Daubechies time-frequency transform"] (https://inspirehep.net/literature/1120390)
 
 * [Roma, Powell, et al "Astrophysics with core-collapse supernova gravitational wave signals in the next generation of gravitational wave detectors"] (https://arxiv.org/pdf/1901.08692.pdf) 
+
+* [Anderson, Brady, Creighton, Flanagan "An excess power statistic for detection of burst sources of gravitational radiation"] (https://arxiv.org/pdf/gr-qc/0008066.pdf)
+
+[ Flanagan & Hughes, "Measuring gravitational waves from binary black hole coalescences:  II. The waves’information and its extraction, with and without templates"] (https://arxiv.org/pdf/gr-qc/9710129.pdf)
