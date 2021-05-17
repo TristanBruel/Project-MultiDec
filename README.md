@@ -17,4 +17,4 @@ run projet.R to generate a signal, compute noisy and filtered data in the 3 dete
 
 * [Anderson, Brady, Creighton, Flanagan "An excess power statistic for detection of burst sources of gravitational radiation"] (https://arxiv.org/pdf/gr-qc/0008066.pdf)
 
-[ Flanagan & Hughes, "Measuring gravitational waves from binary black hole coalescences:  II. The waves’information and its extraction, with and without templates"] (https://arxiv.org/pdf/gr-qc/9710129.pdf)
+* [Flanagan & Hughes, "Measuring gravitational waves from binary black hole coalescences:  II. The waves’information and its extraction, with and without templates"] (https://arxiv.org/pdf/gr-qc/9710129.pdf)
