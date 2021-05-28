@@ -3,6 +3,10 @@ Taking into account several detectors
 
 run projet.R to generate a signal, compute noisy and filtered data in the 3 detectors and draw spectrograms
 
+run inverse_whiteNoise.R to get the estimated hplus and hcross polarizations and their spectrograms from signals with white noise added
+
+run TFMap_realNoise.R to obtain the likelihood maps generated with the method X-Pipeline from signals with simulated LIGO noise
+
 # Bibliography
 
 * [Guersel & Tinto "Near optimal solution to the inverse problem for gravitational wave bursts"] (https://journals.aps.org/prd/abstract/10.1103/PhysRevD.40.3884)
