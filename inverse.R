@@ -88,15 +88,32 @@ inverse = function(fs=4096, wData, detectors=c("LHO","LLO","VIR"), psd,
     gw_filename=paste("Waveforms/",signal_name,sep="")
     sXX = read.table(gw_filename) # V1 time, V2 hplus, V3 hcross
     colnames(sXX) = c ("time","hplus","hcross")
+    fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
+    n = length(sXX$time);
     
-    plot(sXX$time,sXX$hplus,type='l',xlab="Time [s]",ylab="hplus")
-    points(hplus,type='l',col='red',pch=2)
+    padding = floor(0.05*fs_orig+1);   # zero padding with 50ms at the start and end
+    ind1 = 1+padding
+    indn = n+padding
+    paddtime = rep(0,n+2*padding);
+    paddtime[ind1:indn] = sXX$time
+    t1 = sXX$time[1]   # time at which the GW signal starts
+    tn = sXX$time[n]   # time at which the GW signal ends
+    paddtime[1:padding] = seq(t1-padding/fs_orig,t1-1/fs_orig,by=1/fs_orig);
+    paddtime[(indn+1):(indn+padding)] = seq(tn+1/fs_orig,tn+padding/fs_orig,by=1/fs_orig);
+
+    paddhplus=rep(0,n+2*padding);
+    paddhcross=rep(0,n+2*padding);
+    paddhplus[ind1:indn]=sXX$hplus;
+    paddhcross[ind1:indn]=sXX$hcross;
+    
+    plot(paddtime,paddhplus,type='l',xlab="Time [s]",ylab="hplus")
+    points(paddtime,hplus,type='l',col='red',pch=2)
     leg = c("True", "Estimated")
     col = c("black","red")
     legend(x=sXX$time[1]*1.1,y=max(sXX$hplus)*.9,legend=leg,col=col,pch=c(1,2))
     
-    plot(sXX$time,sXX$hcross,type='l',xlab="Time [s]",ylab="hcross")
-    points(hcross,type='l',col='red',pch=2)
+    plot(paddtime,paddhcross,type='l',xlab="Time [s]",ylab="hcross")
+    points(paddtime,hcross,type='l',col='red',pch=2)
     leg = c("True", "Estimated")
     col = c("black","red")
     legend(x=sXX$time[1]*1.1,y=max(sXX$hcross)*.9,legend=leg,col=col,pch=c(1,2))
