@@ -78,49 +78,56 @@ dets = read.csv("detectors_params.csv", sep=",",
 ### Response for gravitational wave ###
 #######################################
 
-grav_response = function(dec, ra, t, pol=0, detector){
+antenna_patterns = function(dec, ra, t, pol=0, detectors){
   # Inputs : - sky position of the source
   #               declination in ° and right ascension in hours
   #          - time GPS of arrival at the detector
   #          - polarization angle (null by default)
-  #          - detector name ('LHO', 'LLO' or 'VIRGO')
+  #          - list of detectors ('LHO', 'LLO', 'VIR' or 'KAG')
   #
   # Output : time of arrival at a given detector
   
-  if (!(detector %in% dets$name)){
-    print((c("detector must be in ",dets$name)))
-    return()
+  nDet = length(detectors);
+  Fp = rep(0,nDet);
+  Fc = rep(0,nDet);
+  k = 0
+  for (det in detectors){
+    if (!(det %in% dets$name)){
+      print((c("detector must be in ",dets$name)))
+      return()
+    }
+    k = k+1
+    
+    index=which(dets$name == det)
+    params = dets[index,]
+    h = params$height
+    l = params$North.lat
+    lambda = params$East.lon
+    az1 = params$arm1.azimuth
+    az2 = params$arm2.azimuth
+    polar1 = params$arm1.polar
+    polar2 = params$arm2.polar
+    detector_frame = earthFrame_to_detector(l, lambda, h, az1, az2, polar1, polar2)
+    
+    arm_vec1 = detector_frame$vectors_arm1
+    arm_vec2 = detector_frame$vectors_arm2
+    
+    #Sky angles
+    psi = pol
+    phi = ra*pi/12 - GPS_to_GMST(t)
+    theta = pi/2 - dec*pi/180
+    
+    grav_tsr = grav_tensor(psi,theta,phi)
+    eplus = grav_tsr$eplus
+    ecross = grav_tsr$ecross
+    strain_plus = eplus%*%t(arm_vec1%*%t(arm_vec1)-arm_vec2%*%t(arm_vec2))
+    strain_cross = ecross%*%t(arm_vec1%*%t(arm_vec1)-arm_vec2%*%t(arm_vec2))
+    
+    Fp[k] = sum(diag(strain_plus))/2
+    Fc[k] = sum(diag(strain_cross))/2
   }
   
-  index=which(dets$name == detector)
-  params = dets[index,]
-  h = params$height
-  l = params$North.lat
-  lambda = params$East.lon
-  az1 = params$arm1.azimuth
-  az2 = params$arm2.azimuth
-  polar1 = params$arm1.polar
-  polar2 = params$arm2.polar
-  detector_frame = earthFrame_to_detector(l, lambda, h, az1, az2, polar1, polar2)
-  
-  arm_vec1 = detector_frame$vectors_arm1
-  arm_vec2 = detector_frame$vectors_arm2
-  
-  #Sky angles
-  psi = pol
-  phi = ra*pi/12 - GPS_to_GMST(t)
-  theta = pi/2 - dec*pi/180
-  
-  grav_tsr = grav_tensor(psi,theta,phi)
-  eplus = grav_tsr$eplus
-  ecross = grav_tsr$ecross
-  strain_plus = eplus%*%t(arm_vec1%*%t(arm_vec1)-arm_vec2%*%t(arm_vec2))
-  strain_cross = ecross%*%t(arm_vec1%*%t(arm_vec1)-arm_vec2%*%t(arm_vec2))
-  
-  Fplus = sum(diag(strain_plus))/2
-  Fcross = sum(diag(strain_cross))/2
-  
-  return(list(Fplus=Fplus, Fcross=Fcross))
+  return(cbind(Fp,Fc))
 }
 
 
@@ -128,41 +135,50 @@ grav_response = function(dec, ra, t, pol=0, detector){
 ### Time Delays ###
 ###################
 
-time_delay = function(dec, ra, t, detector){
+time_delays = function(dec, ra, t, detectors){
   # Inputs : - sky position of the source
   #               declination in ° and right ascension in hours
   #          - time GPS at which the wave arrives at the detector 
-  #               (higher order corrections lost here)
-  #          - detector name ('LHO', 'LLO' or 'VIRGO')
+  #               (WARNING : higher order corrections lost here)
+  #          - list of detectors ('LHO', 'LLO', 'VIR' or 'KAG')
   #
   # Outputs : - (algebraic) time taken for the wave to reach the center of the earth
   
-  if (!(detector %in% dets$name)){
-    print((c("detector must be in ",dets$name)))
-    return()
+  c = 299792458   # light speed
+    
+  nDet = length(detectors);
+  delays = rep(0,nDet);
+  k = 0
+  for (det in detectors){
+    if (!(det %in% dets$name)){
+      print((c("detector must be in ",dets$name)))
+      return()
+    }
+    k = k+1
+  
+    index=which(dets$name == det)
+    params = dets[index,]
+    h = params$height
+    l = params$North.lat
+    lambda = params$East.lon
+    az1 = params$arm1.azimuth
+    az2 = params$arm2.azimuth
+    polar1 = params$arm1.polar
+    polar2 = params$arm2.polar
+    detector_frame = earthFrame_to_detector(l, lambda, h, az1, az2, polar1, polar2)
+    
+    loc = detector_frame$loc
+    
+    theta = pi/2 - dec*pi/180
+    phi = ra*pi/12 - GPS_to_GMST(t)
+    # source position unit vector
+    e_sky = matrix(c(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta)))
+    
+    # projection of the detector location vector onto this unit vector
+    dist = -loc%*%e_sky
+    delays[k] = dist[1]/c
   }
-  
-  index=which(dets$name == detector)
-  params = dets[index,]
-  h = params$height
-  l = params$North.lat
-  lambda = params$East.lon
-  az1 = params$arm1.azimuth
-  az2 = params$arm2.azimuth
-  polar1 = params$arm1.polar
-  polar2 = params$arm2.polar
-  detector_frame = earthFrame_to_detector(l, lambda, h, az1, az2, polar1, polar2)
-  
-  loc = detector_frame$loc
-  
-  theta = pi/2 - dec*pi/180
-  phi = ra*pi/12 - GPS_to_GMST(t)
-  # source position unit vector
-  e_sky = matrix(c(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta)))
-  
-  # projection of the detector location vector onto this unit vector
-  dist = -loc%*%e_sky
-  return(dist[[1]]/299792458)
+  return(delays)
 }
 
 
@@ -178,4 +194,25 @@ GPS_to_GMST = function(time){
 #  s0 = 1.74479315829
   GMST = (w_E*(time-gps2000)+s0)%%(2*pi)
   return(GMST)
+}
+
+
+###################################
+### Dominant Polarization Frame ###
+###################################
+
+convertToDPF = function(Fp,Fc){
+  if (length(Fp)!=length(Fc)){
+    stop("Arguments must be of the same length")
+  }
+  psi=(1/4)*atan2(2*dot(Fp,Fc),sum(Fp^2)-sum(Fc^2));
+  FpDP=cos(2*psi)*Fp+sin(2*psi)*Fc;
+  FcDP=-sin(2*psi)*Fp+cos(2*psi)*Fc;
+  
+  if (sum(FpDP^2)<sum(FcDP^2)){
+    return(cbind(FcDP,FpDP))
+  }
+  else {
+    return(cbind(FpDP,FcDP))
+  }
 }

@@ -19,23 +19,30 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
                            detectors=c("LHO","LLO","VIR"),
                            verbose=FALSE,actPlot=FALSE){
   ######################################################################
-  # Inputs :  sky position of the source
-  #               declination in ° and right ascension in hours
-  #               default is sky position of GW150914
-  #           time GPS at which the wave arrives at the center of the Earth
-  #               default is time of GW150914
-  #           name of the (simulated) waveform
+  # Inputs:  sky position of the source
+  #               declination in °, right ascension in hours
+  #          time GPS at which the wave arrives at the center of the Earth
+  #          name of the simulated waveform
+  #          detectors in which the signal will be measured
   #
-  # Outputs : measured time series for the 3 detectors LHO, LLO and VIRGO
+  # Outputs: time series for the given detectors
+  #          wvf_LHO   time: time vector
+  #                    hoft: amplitude measured
+  #          wvf_LLO
+  #          ...
+  ######################################################################
   
   folder="Waveforms/"
   
-  gw_filename=paste(folder,signal,sep="")
+  gw_filename = paste(folder,signal,sep="");
   sXX = read.table(gw_filename) # V1 time, V2 hplus, V3 hcross
-  colnames(sXX) = c ("time","hplus","hcross")
-  fs_orig = round(1/(sXX$time[2]-sXX$time[1]))
-  n = length(sXX$time)
-  duration=(n-1)/fs_orig
+  colnames(sXX) = c ("time","hplus","hcross");
+  fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
+  n = length(sXX$time);
+  
+  padding = floor(0.05*fs_orig+1);   # zero padding with 50ms at the start and end
+
+  duration = (n+2*padding-1)/fs_orig
   
   if (verbose==TRUE){
     print(gw_filename)
@@ -45,19 +52,33 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
   
   m=length(detectors)
   res=list()
+  # antenna responses and time delay for each detector
+  F=antenna_patterns(dec,ra,t,0,detectors)
+  delays=time_delays(dec,ra,t,detectors)
+  # Reset reference position to first detector
+  delays=delays-delays[1]
+  
+  ### Assign storage ###
+  signal= rep(0,n+2*padding);
+  
+  ind1 = 1+padding
+  indn = n+padding
+  time = rep(0,n+2*padding);
+  time[ind1:indn] = sXX$time
+  t1 = sXX$time[1]   # time at which the GW signal starts
+  tn = sXX$time[n]   # time at which the GW signal ends
+  time[1:padding] = seq(t1-padding/fs_orig,t1-1/fs_orig,by=1/fs_orig);
+  time[(indn+1):(indn+padding)] = seq(tn+1/fs_orig,tn+padding/fs_orig,by=1/fs_orig);
+
   for (k in 1:m){
-    # gravitational response for each detector
-    coeff = grav_response(dec,ra,t,0,detectors[k])
+    Fplus = F[k,1]
+    Fcross = F[k,2]
     
-    signal= rep(0,n)
+    signal[ind1:indn]= Fplus*sXX$hplus + Fcross*sXX$hcross
+
+    timek = time-delays[k]
     
-    for (j in 1:n){
-      signal[j]=coeff$Fplus*sXX$hplus[j] + coeff$Fcross*sXX$hcross[j]
-    }
-    
-    times=sXX$time-time_delay(dec,ra,t,detectors[k])
-    
-    wvf=data.frame("time"=times,"hoft"=signal)
+    wvf=data.frame("time"=timek,"hoft"=signal)
     
     # Plot
     if (actPlot == TRUE){
@@ -92,31 +113,31 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
 
 
 ########################################################################
-data_multiDec = function (fs=4096, wvfs, duration, ampl=0, 
-                          detectors=c("LHO","LLO","VIR"), 
+data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LLO","VIR"), 
                           filter="prewhiten", setseed=0,
                           actPlot=FALSE, verbose=FALSE){
-  ########################################################################
+  ######################################################################
   # Inputs:   fs: sampling frequency
   #           duration: duration (in second) of the output time serie
-  #           wvfs: list of dataframes (time=time, hoft=h(t)) that contain the signal waveforms sampled at fs
-  #           ampl: multiplication factor to change the source distance
-  #           detector: detector name
+  #           wvfs: list of dataframes (time=t, hoft=h(t)) that contain 
+  #                   the signal waveforms sampled at fs
+  #           ampl: multiplication factor to simulate the source distance
+  #           detectors: vector of detectors from which data will be extracted
   #           filter: name of the method
   #              "HP" : The fcut parameter is fixed internally (15 Hz)
-  #              "spectrum" : the data are whiten in Fourier domain using the noise spectrum estimate
+  #              "spectrum" : the data are whiten in Fourier domain using 
+  #                             the noise spectrum estimate
   #              "AR" : AR model
   #              "prewhiten": use the R prewhiten function
   #           setseed: if 0, random seed. Otherwise set to the value
-  #           The wvf is centered in the noise vector
   # 
   # Outputs:  data_H  d$t: time vector
   #                   d$x: noise+signal
   #                   d$y: filtered (noise+signal)
   #           data_L
-  #           data_V
-  
-  n=duration*fs+1
+  #           ...
+  ######################################################################
+  n=length(wvfs[[1]]$time)
   
   m=length(detectors)
   res=list()
@@ -132,8 +153,8 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=0,
     # The output vector will be 2 times larger than n
     factor=2
     
-    # Noise LHO
-    data=noise_generator(factor,fs, duration, detector="aLIGO", setseed=setseed, 
+    # Add noise
+    data=noise_generator(factor,fs, duration, detectors[k], setseed=setseed, 
                          filter=FALSE, actPlot=FALSE, verbose=FALSE)
     
     Y=data$x
@@ -186,7 +207,7 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=0,
       YYf[i]=YY[ind1+i]
     }
     
-    if (actPlot==TRUE){
+    if (actPlot){
       if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
         # Plot for LHO
         plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
@@ -221,7 +242,7 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=0,
 
 ########################################################################
 noise_generator = function (factor,fs, duration, detector, setseed=0,
-                            filter=FALSE, actPlot=TRUE, verbose=TRUE){
+                            filter=FALSE, actPlot=FALSE, verbose=FALSE){
   ######################################################################
   # Inputs :  fs: sampling frequency
   #           duration: duration (in second) of the output time series
@@ -237,7 +258,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   #           d$x: noise
   #           d$y: filtered noise
   #           d$psd: psd
-  ########################################################################  
+  ######################################################################
   
   if (duration < 10){
     # For 3G detectors we need to use a frequency resolution smaller than 0.1 Hz
@@ -254,7 +275,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   # Noise generation
   freq2=fs*fftfreq(n)          # two-sided frequency vector
   freq2[1]=0.001                 # to avoid plotting pb in logscale
-  freq1=freq2[1:int(n/2)]        # one-sided frequency vector
+  freq1=freq2[1:floor(n/2)]        # one-sided frequency vector
   
   # Get the 2 sided PSD
   if (detector == "ALIGO"){
@@ -285,7 +306,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     YY=Y
   }
   
-  if (verbose==TRUE){
+  if (verbose){
     ss <- std(Y)
     print(sprintf("noise_generator:noise time serie sigma:%g", ss))
     ss <- std(YY)
@@ -299,7 +320,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     Tf[i]=(i-1)/fs
   }
   
-  if (actPlot==TRUE){
+  if (actPlot){
     # Time series
     T = seq(1, n, by = 1)
     ts.plot(Y); # noise only
@@ -316,29 +337,29 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     # Fourier transform
     YFT = sqrt(2)*fft(Y)/sqrt(n);
     WFT = sqrt(2)*fft(YY)/sqrt(n);
-    ymin=10^(ceiling(log10(min(abs(YFT)[1:int(n/2)])/sqrt(fs))))
-    ymax=10^(ceiling(log10(max(abs(YFT)[1:int(n/2)])/sqrt(fs))))
+    ymin=10^(ceiling(log10(min(abs(YFT)[1:floor(n/2)])/sqrt(fs))))
+    ymax=10^(ceiling(log10(max(abs(YFT)[1:floor(n/2)])/sqrt(fs))))
     #ymin=1e-24
     #ymax=2e-21
-    plot (freq1, abs(YFT)[1:int(n/2)]/sqrt(fs), log="xy", type="l", xlab="Frequency", ylab="ASD", 
+    plot (freq1, abs(YFT)[1:floor(n/2)]/sqrt(fs), log="xy", type="l", xlab="Frequency", ylab="ASD", 
           col="grey", xlim=c(1, fs/2), ylim=c(ymin,ymax), pch=1, panel.first = grid())
     
     lines(fs*psdest$freq, sqrt(psdest$spec)/sqrt(fs), col="blue", pch=2)
     
-    lines(freq1, abs(WFT)[1:int(n/2)]/sqrt(fs), col="black", pch=4)        # factor 2 because FT is 2 sided
-    lines(fs*psdest_filtered$freq[1:int(n/2)],                      # pspectrum is 1 sided
-          sqrt(psdest_filtered$spec[1:int(n/2)])/sqrt(fs), col="green", pch=5)
+    lines(freq1, abs(WFT)[1:floor(n/2)]/sqrt(fs), col="black", pch=4)        # factor 2 because FT is 2 sided
+    lines(fs*psdest_filtered$freq[1:floor(n/2)],                      # pspectrum is 1 sided
+          sqrt(psdest_filtered$spec[1:floor(n/2)])/sqrt(fs), col="green", pch=5)
     
-    lines(freq1, sqrt(2*psd[1:int(n/2)]), col="red", pch=3)         # PSD is 2 sided PSD
+    lines(freq1, sqrt(2*psd[1:floor(n/2)]), col="red", pch=3)         # PSD is 2 sided PSD
     
     legend_str=c("col noise FT", "col noise spectrun", "ASD model", "filtered FT", "filtered spectrum")
     legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))   
     
     if (verbose==TRUE){
-      s1 <- sqrt(2*trapz(fs*psdest$freq[1:int(n/2)], psdest$spec[1:int(n/2)]/fs))
+      s1 <- sqrt(2*trapz(fs*psdest$freq[1:floo(rn/2)], psdest$spec[1:floor(n/2)]/fs))
       print(sprintf("noise_generator:colored noise rms:%g", s1))
       
-      s2 <- sqrt(2*trapz(fs*psdest_filtered$freq[1:int(n/2)], psdest_filtered$spec[1:int(n/2)]/fs))
+      s2 <- sqrt(2*trapz(fs*psdest_filtered$freq[1:floor(n/2)], psdest_filtered$spec[1:floor(n/2)]/fs))
       print(sprintf("noise_generator:filtered noise rms:%g", s2))
       
       Sn_min=sqrt(2*min(psd))
@@ -348,6 +369,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   }
   return(list(t=Tf,x=Y,y=YY,psd=psd))
 }
+
 
 ########################################################################
 PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
@@ -361,57 +383,20 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   
   cutoff=1e-42            # For 2nd generator detectors
   
-  # depending on the detector, the ASD is located in different columns of the data vector
-  if (detector=="CE1"){
-    psd_filename="PSD/curves_Jan_2020/ce1.txt"
-    data=read.table(psd_filename);
-    sens=data$V2        
-    cutoff=1e-44}   
-  
-  if (detector=="CE2"){
-    psd_filename="PSD/curves_Jan_2020/ce2.txt"
-    data=read.table(psd_filename);
-    sens=data$V2        
-    cutoff=1e-44}   
-  
-  if (detector=="ET_B"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", detector)
-    data=read.table(psd_filename);
-    sens=data$V2
-    cutoff=1e-44}
-  
-  if (detector=="ET_C"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", detector)
-    data=read.table(psd_filename);
-    sens=data$V2
-    cutoff=1e-44}
-  
-  if (detector=="ET_D"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", detector)
-    data=read.table(psd_filename);
-    sens=data$V4   # HF + LF
-    cutoff=1e-44}
-  
-  if (detector=="ADV"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", detector)
-    data=read.table(psd_filename);
-    sens=data$V7}   # Design
-  
   if (detector=="aLIGO"){
     psd_filename=sprintf("PSD/%s_sensitivity.txt", toupper(detector))
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
-  if (detector=="aLIGO2"){
-    psd_filename="PSD/aLIGODesign.txt"
+  if ((detector=="KAGRA") || (detector=="KAG")){
+    psd_filename=sprintf("PSD/ALIGO_sensitivity.txt", detector)
     data=read.table(psd_filename);
-    sens=data$V2}   # Design  
+    sens=data$V6}   # Design
   
-  
-  if (detector=="KAGRA"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", detector)
+  if ((detector=="LHO") || (detector=="LLO") || (detector=="VIR")){
+    psd_filename=sprintf("PSD/ALIGO_sensitivity.txt")
     data=read.table(psd_filename);
-    sens=data$V6}
+    sens=data$V6}   # Design
   
   if (exists("sens")==FALSE){
     stop(sprintf("Detector %s is not implemented in this code. You may want to use CE1, CE2, ET_B, ET_C, ET_D, aLIGO, ADV, KAGRA or ALIGO",detector))
@@ -435,23 +420,23 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     psd = asd*asd
   }else{
     asd = rep(0, n);
-    asd_1sided = asd_func(abs(f[1:int(n/2)]))
+    asd_1sided = asd_func(abs(f[1:floor(n/2)]))
     
-    if (length(asd_1sided) != int(n/2)){
+    if (length(asd_1sided) != floor(n/2)){
       print (sprintf("Warning: ASD vector size %d is different from the frequency vector size %d", 
                      length(asd_1sided), n/2))
     }
     
     
     asd[1]=asd_1sided[1];
-    for(i in 2:(int(n/2))){
+    for(i in 2:(floor(n/2))){
       asd[i]=asd_1sided[i];
       
       # Wraparound frequency: f=0 is the first element (i=1), 
       # and all elements are symetric around index n/2+1
       asd[n+2-i]=asd[i]
     }  
-    asd[n/2+1]=asd_func(abs(f[int(n/2)+1]))
+    asd[n/2+1]=asd_func(abs(f[floor(n/2)+1]))
     
     # Two sided psd
     asd=asd/sqrt(2);
@@ -527,7 +512,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
       XX1 = fft(X1);                          # FFT computing
       XXX1 = XX1*sqrt(psd);                   # Coloring
       Y1 = fft(XXX1, inverse = TRUE);         # FFT inverse
-      Y1 = Re(Y1)*sqrt(fs)/n;                   # noise in time domain
+      Y1 = Re(Y1)*sqrt(fs)/n;                 # noise in time domain
       
       ar_model <- stats::ar(Y1,order.max=10, aic=FALSE ,method=c("yule-walker"), demean=TRUE);
       b <- stats::filter(x=X, filt=c(1, -ar_model$ar[1], -ar_model$ar[2], -ar_model$ar[3], 
@@ -542,26 +527,24 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
       print("Filtering with specrum method cannot be performed because noise psd has not been provided")
     }else{
       # generate another noise TS
-      X1 = rnorm(n, mean=0, sd=1);           # Gaussian white noise
-      XX1 = fft(X1);                          # FFT computing
-      XXX1 = XX1*sqrt(psd);                   # Coloring
-      Y1 = fft(XXX1, inverse = TRUE);         # FFT inverse
-      Y1 = Re(Y1);                   # noise in time domain
+      X1 = rnorm(n, mean=0, sd=1);          # Gaussian white noise
+      XX1 = fft(X1);                        # FFT computing
+      XXX1 = XX1*sqrt(psd);                 # Coloring
+      Y1 = fft(XXX1, inverse = TRUE);       # FFT inverse
+      Y1 = Re(Y1)*sqrt(fs)/n;               # noise in time domain
       
       # compute the PSD
-      #myts <- ts(Y1, start=0, end=duration, frequency=fs)
       psdest <- pspectrum(Y1, Y1.frqsamp=fs, ntap.init=6, Nyquist.normalize = TRUE, 
                           plot=FALSE,verbose = FALSE)
       psdwhitening=rep(0, n);
-      for(i in 1:(int(n/2))){
+      for(i in 1:(floor(n/2))){
         psdwhitening[i]=psdest$spec[i]
         psdwhitening[n+1-i]=psdest$spec[i]
       }
-      
       a = fft(X)                        # FFT computing and normalization
-      b = a/sqrt(psdwhitening)          # whitening
+      b = a/sqrt(psdwhitening)       # whitening
       c = fft(b, inverse = TRUE);       # FFT inverse
-      Y = s0*Re(c);                     # Normalisation factor of the 2 FFTs
+      Y = s0*Re(c)/n;                   # Normalization factor of the 2 FFTs
       
       #    myfilter=butter(n=4,W=10/(fs/2),type="high")
       #    YY=filtfilt(filt=myfilter,x=YY)
@@ -611,100 +594,134 @@ int = function(n){
   }
 }
 
-########################################################################
-aLIGO_PSD = function(f,type){
-  ########################################################################
-  # Original aLIGO PSD function used by Patricio
-  cutoff = -109.35 + log(2e10);
-  fn     = length(f);
-  logpsd = rep(0, fn);
-  if(f[1]==0){
-    f[1]=f[2]
-  }
-  if(type == 1){
-    for(i in 1:fn){
-      x  = f[i]/215;
-      x2 = x*x;
-      logpsd[i] = log(1e-49) + log(x^(-4.14) -5/x2 + 111*(1-x2+0.5*x2*x2)/(1.+0.5*x2));
-      
-      if(logpsd[i]>cutoff){
-        logpsd[i]=cutoff;
-      }
-    }
-    output=exp(logpsd);
-    
-  }else{
-    for(i in 1:(int(fn/2)+1)){
-      x  = abs(f[i]/215);
-      x2 = x*x;
-      logpsd[i] = log(1e-49) + log(x^(-4.14) -5./x2 + 111.*(1-x2+0.5*x2*x2)/(1.+0.5*x2));
-      
-      if(logpsd[i]>cutoff){
-        logpsd[i]=cutoff;
-      }
-      if(i>0){
-        logpsd[fn-i]=logpsd[i];
-      }
-    }
-    output=exp(logpsd)/2;            # Two sided PSD
-  }
-  return (output)
-}
 
 ########################################################################
-aLIGO_PSD_new = function(f,type){
+compute_SNR = function(wvf, detector="aLIGO", asd=NULL, fcut=0, dist=10, 
+                       pbOff=FALSE, actPlot=FALSE){
   ########################################################################
-  # aLIGO sensitivity curve: fit the data point from https://dcc.ligo.org/LIGO-T1800044/public
-  # Type=1 --> one-sided PSD.
-  # Type=2 --> two-sided PSD. 
+  # Compute the Signal-To-Noise ratio for a given wvf (x$time, x$hoft) 
+  # and a given detector
   
-  S1 = 5.0e-26;
-  S2 = 1.0e-40;
-  S3 = 1.4e-46;
-  S4 = 2.7e-51;
-  fcut = 10;
-  cutoff = 1e-42;
-  fn = length(f);
-  output = rep(0, fn); #np.zeros(len(f))
+  fs=round(1/(wvf$time[2]-wvf$time[1]))
+  n=length(wvf$hoft)
+  a = nextpow2(2*n)         #zero padding and rounding to the next power of 2
+  n2=2^a
   
-  # to avoid issue with f=0
-  if(f[1]==0){
-    f[1]=f[2];
+  # Remove or not 0.100s after the bounce (set hoft values to 0)
+  if (pbOff == TRUE){
+    ext=which(wvf$time<0.1)
+    wvf$hoft[ext]=0
   }
-  if(type == 1){
-    for(i in 1:fn){
-      x = abs(f[i]);
-      output[i] =  S1/(x^20) + S2/(x^4.05) + S3/(x^.5) + S4*((x/fcut)^2);
-      if(output[i]>cutoff){
-        output[i]=cutoff
-      }
-    }
+  
+  
+  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
+  freq2[1]=0.001                 # to avoid plotting pb in logscale
+  freq1=freq2[1:floor(n2/2)]       # one-sided frequency vector
+  
+  # Get the 1 sided PSD
+  if (detector == "ALIGO"){
+    psd=aLIGO_PSD_new(freq1, 1)
   }else{
-    for(i in 1:(int(fn/2)+1)){ # range(int(len(f)/2)+1)
-      x = abs(f[i]);
-      output[i] = S1/(x^20) + S2/(x^4.05) + S3/(x^.5) + S4*((x/fcut)^2);
-      if(output[i]>cutoff){
-        output[i]=cutoff
-      }
-      
-      # Wraparound frequency: f=0 is the first element (i=1), 
-      # and all elements are symetric around index fn/2+1
-      if(i>1 && i<fn/2+1){
-        output[fn+2-i]=output[i]
-      }
-      
-      
-    }  
-    output=output/2;            # Two sided PSD
-    #    output=shifter(output,-1)  # No more needed after correction 4 lines above
+    psd=PSD_fromfiles(freq1, 1, detector)
   }
-  return(output);
+  
+  if (!is.null(asd)){
+    psd = rep(asd*asd, length(freq1))
+  }
+  
+  vec=rep(0,n2)
+  for (i in 1:n){
+    vec[n2/4+i]=vec[n2/4+i]+wvf$hoft[i]*10./dist
+  }  
+  
+  hf=fft(vec);          # normalization wrt the sampling
+  
+  hf=hf[1:(n2/2)]                # The integral is performed over positive freqs
+  
+  hf=subset(hf,freq1-fcut>0)
+  psd=subset(psd,freq1-fcut>0)
+  freq1=subset(freq1, freq1-fcut>0)
+  
+  snr=sqrt(4/fs/n2*sum(abs(hf)^2/psd))
+  
+  if (actPlot){
+    plot (freq1, sqrt(freq1)*abs(hf), log="xy", type="l", xlab="Frequency", ylab="hchar", 
+          col="grey", xlim=c(1, fs/2), ylim=c(1e-24,1e-20), pch=1, panel.first = grid())
+    points(freq1,sqrt(psd), type="l", col="black",pch=2)
+    leg = c("sqrt(fs) x h~(f)", "ASD")
+    col = c("grey","black")
+    legend (x=1,y=6e-22,legend=leg,cex=.8,col=col,pch=c(1,2))
+    title(c("SNR:",snr))
+  }
+  return(snr)  
 }
 
 
-### Compute average correlation coefficient between two signals ###
+########################################################################
+whiteNoise = function(wvf, SNR, fs=4096, fcut=0, 
+                      actPlot = FALSE, main=NULL, verbose=FALSE){
+  ########################################################################
+  # Create a white gaussian noise that match the desired Signal-To-Noise ratio
+  # for a given waveform (x$time, x$hoft)
+  # Outputs: noisy: signal+noise
+  #          psd: constant psd
+  
+  # Compute the constant (one-sided) psd required to get the desired SNR
+  n=length(wvf$hoft)
+  a=nextpow2(2*n)         #zero padding and rounding to the next power of 2
+  n2=2^a
+  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
+  freq1=freq2[1:floor(n2/2)]
+  
+  vec=rep(0,n2)
+  for (i in 1:n){
+    vec[n2/4+i]=vec[n2/4+i]+wvf$hoft[i]
+  }  
+  
+  hf=fft(vec);     # normalization wrt the sampling
+  
+  hf=hf[1:(n2/2)]    # integral performed over positive frequencies
+  
+  hf=subset(hf,freq1-fcut>0);
+  freq1=subset(freq1, freq1-fcut>0);
+  
+  psd=4/fs/n2*sum(abs(hf)^2)/SNR^2
+  
+  # Create Noise
+  X = rnorm(n, mean=0, sd=1);
+  XX = fft(X);
+  XXX = XX*sqrt(psd)*sqrt(fs);
+  Y = fft(XXX, inverse = TRUE);
+  Y = Re(Y)/n;
+  
+  for (i in 1:n){
+    Y[i] = Y[i] + wvf$hoft[i]
+  }
+  
+  if (verbose){
+    print(sprintf("Gaussian white noise on detector %s with mean %g and standard deviation %g",
+                  main, mean(Y), sd(Y)));
+  }
+  
+  if (actPlot){
+    plot(wvf$time,Y,type='l',col='black',
+         xlab = "Time",ylab="Hoft",main=main)
+    points(wvf$time,wvf$hoft,type='l',col='red')
+    leg = c("Noisy signal", "Signal")
+    col = c("black","red")
+    legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,2))
+  }
+  
+  return(list(noisy=Y,psd=psd))
+}
 
-compute_cor = function(h1,h2,psd,fs=4096){
+
+########################################################################
+compute_cor = function(h1,h2,psd=1,fs=4096){
+  ########################################################################
+  #
+  # Compute the average correlation coefficient between two signals
+  
   if (length(h1) != length(h2)){
     print("Signals must be of same length")
   }
