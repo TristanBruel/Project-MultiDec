@@ -27,7 +27,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   #                 Must be a power of 2
   #           transientLength: number of samples to ignore (beginning and end)
   #           freqBand: band of frequencies to include in the maps
-  #           windowType: window type to be used in FFTs ('hann' or 'bartlett')
+  #           windowType: window type to be used in FFTs ('hann', 'bartlett' or 'modifiedHann')
   #
   # Output : time frequency map
   ######################################################################
@@ -108,6 +108,12 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   else if (windowType=="bartlett"){
     window=matrix(bartlett(integLength),ncol=1);
   }
+  else if (windowType=="modifiedHann"){
+    window=hanning(integLength/2);
+    window[((3/4)*integLength+1):integLength]=window[((1/4)*integLength+1):(integLength/2)];
+    window[((1/4)*integLength+1):((3/4)*integLength)]=1;
+    window=matrix(window,ncol=1);
+  }
   else{
     window=ones(integLength,1);
   }
@@ -126,6 +132,10 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
         offsetStartInd=segStartInd+integLength*(j-1)*offset;
         offsetStopInd=segStopInd+integLength*(j-1)*offset;
         data=wData[offsetStartInd:offsetStopInd,k];
+        # Optimal rescaling to prevent numerical issues
+        rescale=stats::sd(data);
+        data=data/rescale;  # Data now has standard deviation 1
+        data=data-mean(data);
         dataArray=matrix(data,nrow=integLength);
         timeBins=seq(j,nTimeBins,by=1/offset);
         TFMapFull[,timeBins,k]=mvfft(windowData*dataArray);
@@ -154,10 +164,14 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   # Convert to Dominant Polarization Frame
   wFpDP=zeros(nFreqBins,nDet);
   wFcDP=zeros(nFreqBins,nDet);
+  nwFpDP=zeros(nFreqBins,nDet);
+  nwFcDP=zeros(nFreqBins,nDet);
   for (l in 1:nFreqBins){
     DPF=convertToDPF(wFp[l,],wFc[l,]);
     wFpDP[l,]=DPF[,1];
     wFcDP[l,]=DPF[,2];
+    nwFpDP[l,]=DPF[,1]/sum(DPF[,1]^2);
+    nwFcDP[l,]=DPF[,2]/sum(DPF[,2]^2);
   }
   
   ### Residual delays ###
@@ -180,6 +194,10 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
         offsetStartInd=segStartInd+integLength*(j-1)*offset;
         offsetStopInd=segStopInd+integLength*(j-1)*offset;
         data=wData[offsetStartInd:offsetStopInd,k];
+        # Optimal rescaling to prevent numerical issues
+        rescale=stats::sd(data);
+        data=data/rescale;  # Data now has standard deviation 1
+        data=data-mean(data);
         dataArray=matrix(data,nrow=integLength);
         timeBins=seq(j,nTimeBins,by=1/offset);
         TFMapFull[,timeBins,k]=mvfft(windowData*dataArray);
@@ -194,8 +212,9 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   }
 
   # DPF matrix components
-  Mpp=sum(wFpDP*wFpDP)
-  Mcc=sum(wFcDP*wFcDP)
+  Mpp=rowSums(wFpDP*wFpDP);
+  Mcc=rowSums(wFcDP*wFcDP);
+  epsilon=Mcc/Mpp;
   
   # Antenna-response weighted TF maps
   wFpTFMap=zeros(nFreqBins,nTimeBins);
@@ -212,15 +231,19 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   
   # Cross energy
   crossLikelihood=(1/Mcc)*(Re(wFcTFMap)^2+Im(wFcTFMap)^2);
-  
+
   # Standard likelihood
   stdLikelihood=plusLikelihood+crossLikelihood;
+  
+  # Soft constraint likelihood
+  softLikelihood=plusLikelihood+epsilon*crossLikelihood;
   
   # log-scale transformation
   if(logPow){
     plusLikelihood=log10(sqrt(plusLikelihood));
     crossLikelihood=log10(sqrt(crossLikelihood));
     stdLikelihood=log10(sqrt(stdLikelihood));
+    softLikelihood=log10(sqrt(softLikelihood));
   }
   
   ### Plot Maps ###
@@ -231,6 +254,11 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
                xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Cross energy")
     image.plot(timeIndices[,1],inbandFreq,t(stdLikelihood),
                xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Standard likelihood")
+    image.plot(timeIndices[,1],inbandFreq,t(softLikelihood),
+               xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
   }
-  return(list(stdLike=stdLikelihood,Ep=plusLikelihood,Ec=crossLikelihood))
+  rplus=list(x=timeIndices[,1],y=inbandFreq,z=t(plusLikelihood))
+  rcross=list(x=timeIndices[,1],y=inbandFreq,z=t(crossLikelihood))
+  rstd=list(x=timeIndices[,1],y=inbandFreq,z=t(stdLikelihood))
+  return(list(stdLike=rstd,Ep=rplus,Ec=rcross))
 }
