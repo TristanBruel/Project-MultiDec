@@ -42,48 +42,47 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
   
   padding = floor(0.05*fs_orig+1);   # zero padding with 50ms at the start and end
 
-  duration = (n+2*padding-1)/fs_orig
+  duration = (n+2*padding-1)/fs_orig;
   
   if (verbose==TRUE){
     print(gw_filename)
-    print(sprintf("Number of samples at %g Hz: %g",fs_orig, n))
     print(sprintf("Duration : %gs", duration))
   }
   
-  m=length(detectors)
-  res=list()
+  nDet=length(detectors);
+  res=list();
   # antenna responses and time delay for each detector
-  F=antenna_patterns(dec,ra,t,0,detectors)
-  delays=time_delays(dec,ra,t,detectors)
+  F=antenna_patterns(dec,ra,t,0,detectors);
+  delays=time_delays(dec,ra,t,detectors);
   # Reset reference position to first detector
-  delays=delays-delays[1]
+  delays=delays-delays[1];
+  delayLengths=round(delays*fs);
   
   ### Assign storage ###
-  signal= rep(0,n+2*padding);
+  time = rep(0,n+2*padding);
   
   ind1 = 1+padding
   indn = n+padding
-  time = rep(0,n+2*padding);
   time[ind1:indn] = sXX$time
   t1 = sXX$time[1]   # time at which the GW signal starts
   tn = sXX$time[n]   # time at which the GW signal ends
   time[1:padding] = seq(t1-padding/fs_orig,t1-1/fs_orig,by=1/fs_orig);
   time[(indn+1):(indn+padding)] = seq(tn+1/fs_orig,tn+padding/fs_orig,by=1/fs_orig);
 
-  for (k in 1:m){
-    Fplus = F[k,1]
-    Fcross = F[k,2]
+  for (k in 1:nDet){
+    signal= rep(0,n+2*padding);
+    Fplus = F[k,1];
+    Fcross = F[k,2];
+    startGW=ind1+delayLengths[k];
+    endGW=indn+delayLengths[k];
+    signal[startGW:endGW]= Fplus*sXX$hplus + Fcross*sXX$hcross;
     
-    signal[ind1:indn]= Fplus*sXX$hplus + Fcross*sXX$hcross
-
-    timek = time-delays[k]
-    
-    wvf=data.frame("time"=timek,"hoft"=signal)
+    wvf=data.frame("time"=time,"hoft"=signal);
     
     # Plot
     if (actPlot == TRUE){
-      plot(wvf$time,wvf$hoft,type='l',xlab="Time [s]",ylab="Hoft",
-           main=detectors[k])
+      plot(1000*wvf$time,wvf$hoft,type='l',xlab="Time [ms]",ylab="Hoft",
+           main=detectors[k],ylim=c(-3e-22,3e-22))
     }
     
     res$wvf=wvf
@@ -92,22 +91,12 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
   res$duration = duration
   
   # Time delays between the arrivals at each detector
-  #if (verbose==TRUE){
-  #  delays = rep(0,m);
-  #  for (i in 1:m){
-  #    delays[i] = c(time_delay(dec, ra, t, detectors[i]))
-  #  }
-  #  first = which(delays==max(delays))
-  #  third = which(delays==min(delays))
-  #  second = which(!(c(1,2,3)%in%c(first,third)))
-  #  ## WARNING ## : special cases when 2 detectors measure a signal at the exact same time
-  #  dt_second = delays[first]-delays[second]
-  #  dt_third = delays[first]-delays[third]
-    
-  #  print(sprintf("Signal detected first at %s",detectors[first]))
-  #  print(sprintf("Then at %s with a %fs delay",detectors[second],dt_second))
-  #  print(sprintf("And finally at %s with a %fs delay",detectors[third],dt_third))
-  #}
+  if (verbose==TRUE){
+    for (k in 2:nDet){
+      print(sprintf("Time shift between %s and %s is %s ms",detectors[k],
+                    detectors[1],1000*delays[k]))
+    }
+  }
   return(res)
 }
 
