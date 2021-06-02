@@ -26,10 +26,9 @@ inverse = function(fs=4096, wData, detectors=c("LHO","LLO","VIR"), psd,
   
   ### Command line arguments ###
   nDet=length(detectors);
-  if (length(wData) < nDet){
+  if (dim(wData)[2] != nDet){
     stop("Number of detectors inconsistent with the data provided")
   }
-  nDat=length(wData[,1]);
   
   ### Detectors information ###
   dec=skyPosition[1];
@@ -39,28 +38,34 @@ inverse = function(fs=4096, wData, detectors=c("LHO","LLO","VIR"), psd,
   delays=time_delays(dec,ra,t,detectors);
   # Reset reference position to first detector
   delays=delays-delays[1]
+  delayLengths=round(delays*fs);
   if (verbose){
     print("Antenna response matrix : F")
     print(F)
   }
   
   ### Data process ###
+  # Samples to ignore at the start and at the end (20ms)
+  transient = floor(0.02*fs);
+  start=transient;
+  end=length(wData[,1])-transient-1;
+  L=end-start+1;
+  auxdata=zeros(L,nDet);
   # Time alignment
   for (k in 1:nDet){
-    wData[,k]=wData[,k]+delays[k]
+    auxdata[,k]=wData[(start+delayLengths[k]):(end+delayLengths[k]),k];
   }
   
   # Fourier transform
-  dataf=mvfft(wData);
+  dataf=mvfft(auxdata);
   
   ### Resolution : standard likelihood ###
-  fhplus = rep(0,T);
-  fhcross = rep(0,T);
+  fhplus = rep(0,L);
+  fhcross = rep(0,L);
   
   diag = rep(0,nDet);
   
-  for (f in 1:T){
-    
+  for (f in 1:L){
     # Noise-spectrum-weighted antenna responses
     for (k in 1:nDet){
       diag[k] = 1/sqrt(psd[f,k])
@@ -71,17 +76,17 @@ inverse = function(fs=4096, wData, detectors=c("LHO","LLO","VIR"), psd,
     # Dominant Polarization Frame
     wFp=wF[,1];
     wFc=wF[,2];
-    DPF=convertToDPF(wFp,wFc)
+    DPF=convertToDPF(wFp,wFc);
     
     # Inverse
-    d=dataf[f,]
-    res = solve(Conj(t(DPF)) %*% DPF, Conj(t(DPF)) %*% d)
-    fhplus[f] = res[1]
-    fhcross[f] = res[2]
+    d=dataf[f,];
+    res = solve(Conj(t(DPF)) %*% DPF, Conj(t(DPF)) %*% d);
+    fhplus[f] = res[1];
+    fhcross[f] = res[2];
   }
   
-  hplus = Re(fft(fhplus, inverse = TRUE))/T;
-  hcross = Re(fft(fhcross, inverse = TRUE))/T;
+  hplus = Re(fft(fhplus, inverse = TRUE))/L;
+  hcross = Re(fft(fhcross, inverse = TRUE))/L;
   
   ### Plots ###
   if (actPlot){
@@ -90,30 +95,17 @@ inverse = function(fs=4096, wData, detectors=c("LHO","LLO","VIR"), psd,
     colnames(sXX) = c ("time","hplus","hcross")
     fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
     n = length(sXX$time);
+    ind0 = floor((L-n)/2)+1;
+    indn = L-floor((L-n)/2);
     
-    padding = floor(0.05*fs_orig+1);   # zero padding with 50ms at the start and end
-    ind1 = 1+padding
-    indn = n+padding
-    paddtime = rep(0,n+2*padding);
-    paddtime[ind1:indn] = sXX$time
-    t1 = sXX$time[1]   # time at which the GW signal starts
-    tn = sXX$time[n]   # time at which the GW signal ends
-    paddtime[1:padding] = seq(t1-padding/fs_orig,t1-1/fs_orig,by=1/fs_orig);
-    paddtime[(indn+1):(indn+padding)] = seq(tn+1/fs_orig,tn+padding/fs_orig,by=1/fs_orig);
-
-    paddhplus=rep(0,n+2*padding);
-    paddhcross=rep(0,n+2*padding);
-    paddhplus[ind1:indn]=sXX$hplus;
-    paddhcross[ind1:indn]=sXX$hcross;
-    
-    plot(paddtime,paddhplus,type='l',xlab="Time [s]",ylab="hplus")
-    points(paddtime,hplus,type='l',col='red',pch=2)
+    plot(sXX$time,sXX$hplus,type='l',xlab="Time [s]",ylab="hplus")
+    points(sXX$time,hplus[ind0:indn],type='l',col='red',pch=2)
     leg = c("True", "Estimated")
     col = c("black","red")
     legend(x=sXX$time[1]*1.1,y=max(sXX$hplus)*.9,legend=leg,col=col,pch=c(1,2))
     
-    plot(paddtime,paddhcross,type='l',xlab="Time [s]",ylab="hcross")
-    points(paddtime,hcross,type='l',col='red',pch=2)
+    plot(sXX$time,sXX$hcross,type='l',xlab="Time [s]",ylab="hcross")
+    points(sXX$time,hcross[ind0:indn],type='l',col='red',pch=2)
     leg = c("True", "Estimated")
     col = c("black","red")
     legend(x=sXX$time[1]*1.1,y=max(sXX$hcross)*.9,legend=leg,col=col,pch=c(1,2))
