@@ -70,11 +70,7 @@ earthFrame_to_detector = function(l, lambda, h, az1, az2, polar1, polar2){
   return(list(loc=loc,vectors_arm1=arm1,vectors_arm2=arm2))
 }
 
-
-# Detectors parameters  
-dets = read.csv("detectors_params.csv", sep=",", 
-                stringsAsFactors=FALSE, header=TRUE)
-
+#######################################
 ### Response for gravitational wave ###
 #######################################
 
@@ -86,6 +82,10 @@ antenna_patterns = function(dec, ra, t, pol=0, detectors){
   #          - list of detectors ('LHO', 'LLO', 'VIR' or 'KAG')
   #
   # Output : time of arrival at a given detector
+  
+  # Detectors parameters  
+  dets = read.csv("detectors_params.csv", sep=",", 
+                  stringsAsFactors=FALSE, header=TRUE)
   
   nDet = length(detectors);
   Fp = rep(0,nDet);
@@ -144,6 +144,10 @@ time_delays = function(dec, ra, t, detectors){
   #
   # Outputs : - (algebraic) time taken for the wave to reach the center of the earth
   
+  # Detectors parameters  
+  dets = read.csv("detectors_params.csv", sep=",", 
+                  stringsAsFactors=FALSE, header=TRUE)
+  
   c = 299792458   # light speed
     
   nDet = length(detectors);
@@ -194,6 +198,30 @@ GPS_to_GMST = function(time){
 #  s0 = 1.74479315829
   GMST = (w_E*(time-gps2000)+s0)%%(2*pi)
   return(GMST)
+}
+
+# Function taken from X-Pipeline
+
+GPS_to_GMST2 = function(gps){
+  # Input : time GPS (in s)
+  # Output : time GMST (in s)
+  
+  gps0 = 630763213;   # GPS time of J2000 epoch
+  D = (gps-gps0)/86400;   # days since J2000
+  d_u = floor(D)+1/2;   # days between J2000 and last 0h at Greenwich
+  if (D-d_u<0){
+    d_u = d_u-1
+  }
+  df_u = D-d_u;   # fraction of day
+  # GMST(s) at Greenwich at last 0h
+  T_u = d_u/36525
+  gmst0h = 24110.54841+8640184.812866*T_u+0.093104*T_u^2-6.2e-6*T_u^3;
+  # Current GMST(s)
+  gmst = gmst0h+1.00273790935*86400*df_u;
+  if (gmst>=86400){
+    gmst = gmst-floor(gmst/86400)*86400;
+  }
+  return(gmst)
 }
 
 
