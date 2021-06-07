@@ -42,7 +42,7 @@ temp=1
 
 for (dist in distances){
   data = data_multiDec(fs,signals,signals$duration,detectors=detectors,
-                       setseed=3,ampl=10/dist,verbose=FALSE,actPlot=FALSE);
+                       setseed=2,ampl=10/dist,verbose=FALSE,actPlot=FALSE);
   # samples to ignore at the start and end (50ms)
   transient = floor(0.05*fs+1);
   
@@ -57,14 +57,14 @@ for (dist in distances){
   }
   
   likelihoods=timeFreqMap(fs,wData,detectors,psd,skyPosition,100,10,transient,
-                          freqBand=c(0,1500),windowType='modifiedHann',actPlot=T);
+                          freqBand=c(0,1500),windowType='modifiedHann');
   r=likelihoods$soft;
   n=length(r$x);
   gmode=findGmodes(r,l=100,p=90,actPlot=T,gmode="left",
                    initfreq_L = c(0,400),um_L=4,dm_L=4)
   timedata = seq(r$x[1],r$x[n],length=n);
-  #points(timedata,gmode$maxf_L,col=colors[temp])
+  points(timedata,gmode$maxf_L,col=colors[temp])
   temp=temp+1;
 }
-#legend ("topleft",legend=c("hplus","hcross",distances),
- #       col=c('black','grey',colors),pch=1)
+legend ("topleft",legend=c("hplus","hcross",distances),
+        col=c('black','grey',colors),pch=1)
