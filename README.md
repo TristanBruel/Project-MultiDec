@@ -22,3 +22,5 @@ run TFMap_realNoise.R to obtain the likelihood maps generated with the method X-
 * [Anderson, Brady, Creighton, Flanagan "An excess power statistic for detection of burst sources of gravitational radiation"] (https://arxiv.org/pdf/gr-qc/0008066.pdf)
 
 * [Flanagan & Hughes, "Measuring gravitational waves from binary black hole coalescences:  II. The waves’information and its extraction, with and without templates"] (https://arxiv.org/pdf/gr-qc/9710129.pdf)
+
+* [D. Iatsenko, P.V.E. McClintock, A. Stefanovska, "Extraction of instantaneous frequencies from ridgesin time–frequency representations of signals"] {https://reader.elsevier.com/reader/sd/pii/S0165168416000451?token=941AB38C4F6AF61D5D991310AB359B7A1289351D36077566621813DEF9BD6E4F2068F0CA3945EF355F95FBA831E1F4EB&originRegion=eu-west-1&originCreation=20210608133703)
