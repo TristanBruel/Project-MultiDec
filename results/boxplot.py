@@ -58,6 +58,7 @@ name="s11.2--LS220"
 #name="s20.0--LS220"
 #name="s25.0--LS220"
 #name="s40.0--LS220"
+method="singleDec"
 
 try:
     os.stat(name)
@@ -66,7 +67,7 @@ except:
 
 for det in detectors:
     title= name + ' ' + det
-    filename='singleDec/results_AA_prewhiten_f2_' + name + '_' + det + '.txt'
+    filename=method+'/results_AA_prewhiten_f2_' + name + '_' + det + '.txt'
 
     a= np.loadtxt(filename, dtype='f', delimiter=' ')
     dist=np.unique(a[:,0]) 
