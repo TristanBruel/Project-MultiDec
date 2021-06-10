@@ -21,7 +21,6 @@ def minmax(a, ind_mean, ind_var):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-#name="s20-gw"
 name="s11.2--LS220"
 #name="s15.0--GShen"
 #name="s15.0--LS220"
@@ -29,10 +28,14 @@ name="s11.2--LS220"
 #name="s20.0--LS220"
 #name="s25.0--LS220"
 #name="s40.0--LS220"
+detector="LHO"
+#detector="LLO"
+#detector="VIR"
+method="singleDec"
+#method="multiDec"
 
-detector='LHO'
 title=name + ' ' + detector
-filename='singleDec/results_AA_prewhiten_f2_' + name + '_' + detector + '.txt'
+filename=method+'/results_AA_prewhiten_f2_' + name + '_' + detector + '.txt'
 
 a= np.loadtxt(filename, dtype='f', delimiter=' ')
 dist=np.unique(a[:,0]) 
