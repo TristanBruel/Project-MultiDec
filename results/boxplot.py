@@ -46,11 +46,6 @@ def buildbox(a,index):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-detectors = ["aLIGO", "ADV", "KAGRA", "CE1", "CE2", "ET_B", "ET_C", "ET_D"]
-signals = ["s20.0--SFHo", "s11.2--LS220", "s15.0--GShen", "s15.0--SFHo", "s15.0--LS220", "s20.0--LS220", "s25.0--LS220", "s40.0--LS220"]
-
-detectors=["aLIGO"]
-#name="s20.0--SFHo"
 name="s11.2--LS220"
 #name="s15.0--GShen"
 #name="s15.0--LS220"
@@ -58,7 +53,11 @@ name="s11.2--LS220"
 #name="s20.0--LS220"
 #name="s25.0--LS220"
 #name="s40.0--LS220"
+detector="LHO"
+#detector="LLO"
+#detector="VIR"
 method="singleDec"
+#method="multiDec"
 
 try:
     os.stat(name)
