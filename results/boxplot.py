@@ -46,16 +46,15 @@ def buildbox(a,index):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-name="s11.2--LS220"
+#name="s11.2--LS220"
 #name="s15.0--GShen"
 #name="s15.0--LS220"
 #name="s15.0--SFHo"
-#name="s20.0--LS220"
+name="s20.0--LS220"
 #name="s25.0--LS220"
 #name="s40.0--LS220"
-detector="LHO"
-#detector="LLO"
-#detector="VIR"
+#detectors=["LHO","LLO","VIR"]
+detectors=["LHO"]
 method="singleDec"
 #method="multiDec"
 
@@ -71,7 +70,7 @@ for det in detectors:
     a= np.loadtxt(filename, dtype='f', delimiter=' ')
     dist=np.unique(a[:,0]) 
     dist_nb=len(dist)
-    #print('Number of distances: ', dist_nb)
+    print('Number of distances: ', dist_nb)
     
     # coverage
     data,box_name,q1,q2,q3=buildbox(a,1)
@@ -81,10 +80,10 @@ for det in detectors:
     blue_cross = dict(markerfacecolor='b', marker='+')
     bx=plt.boxplot(data,flierprops=blue_cross)
 
-    pylab.xticks(range(1,dist_nb), box_name)
+    pylab.xticks(range(1,dist_nb+1), box_name)
     
     plt.xlabel('Distance [kpc]')
-    plt.ylabel('coverage')
+    plt.ylabel('Coverage probability')
     plt.title(title)
     plt.grid(False)
     plt.xlim((1,30))
@@ -115,7 +114,7 @@ for det in detectors:
     plt.figure()
     blue_cross = dict(markerfacecolor='b', marker='+')
     bx=plt.boxplot(data, flierprops=blue_cross)
-    pylab.xticks(range(1,dist_nb), box_name)
+    pylab.xticks(range(1,dist_nb+1), box_name)
     
     plt.xlabel('Distance [kpc]')
     plt.ylabel('$\Delta$')
