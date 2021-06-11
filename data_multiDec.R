@@ -14,16 +14,17 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=30, ra=6, t=1302220800, 
-                           signal="KURODA_TM1_H_resampled.dat",
-                           detectors=c("LHO","LLO","VIR"),
-                           verbose=FALSE,actPlot=FALSE){
+signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
+                           signal="KURODA", detectors=c("LHO","LLO","VIR"), 
+                           pbOff=TRUE, verbose=FALSE, actPlot=FALSE){
   ######################################################################
   # Inputs:  sky position of the source
   #               declination in °, right ascension in hours
   #          time GPS at which the wave arrives at the center of the Earth
+  #          sampling frequency of the output time series
   #          name of the simulated waveform
   #          detectors in which the signal will be measured
+  #          first 100ms after bounce removed
   #
   # Outputs: time series for the given detectors
   #          wvf_LHO   time: time vector
@@ -34,61 +35,117 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
   
   folder="Waveforms/"
   
-  gw_filename = paste(folder,signal,sep="");
-  sXX = read.table(gw_filename) # V1 time, V2 hplus, V3 hcross
+  # Metadata  
+  metadata_filename = paste(folder,"metadata.csv", sep="");
+  meda = read.csv(metadata_filename, stringsAsFactors=FALSE);
+  colnames(meda) = c("name","wvf_name","truedata_name", "tb");
+  index=which(meda$name == signal);
+  gw_filename=paste(folder,meda$wvf_name[index],sep="");
+  sXX = read.table(gw_filename);
+  # 2D or 3D simulation
+  if (length(sXX)==2){
+    sXX$V3 = rep(0,length(sXX$V1));
+    t_bounce=meda$tb[index];
+    
+    # True data to define the ratio Mpns / Rpns^2 (for g-mode)
+    truedata_filename=paste(folder,"Ratios/",meda$truedata_name[index],sep="")
+    true_data = read.table(truedata_filename,sep = ",",comment.char = "#",header=TRUE);
+    if (signal != "s20.0--SFHo"){
+      true_data = cbind(true_data$time, true_data$mass_pns / true_data$r_pns^2);
+    }
+    colnames(true_data) = c ("time", "ratio");
+    true_data = as.data.frame(true_data);
+  }
+  else{
+    t_bounce=0
+    true_data=NULL
+  }
+  
   colnames(sXX) = c ("time","hplus","hcross");
   fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
-  n = length(sXX$time);
   
-  padding = floor(0.05*fs_orig+1);   # zero padding with 50ms at the start and end
-
-  duration = (n+2*padding-1)/fs_orig;
+  # Time shift such that t_bounce=0
+  sXX$time=sXX$time-t_bounce;
+  true_data$time=true_data$time-t_bounce;
   
-  if (verbose==TRUE){
-    print(gw_filename)
-    print(sprintf("Duration : %gs", duration))
+  # Resample at fs
+  if (fs != fs_orig){
+    resamp_factor=fs_orig/fs
+    hplus=resample(sXX$hplus,fs,fs_orig);
+    hcross=resample(sXX$hcross,fs,fs_orig);
+    n=length(hplus);
+    time=rep(0,n);
+    for (i in 1:n) {
+      time[i]=mean(sXX$time[((i-1)*resamp_factor+1):((i-1)*resamp_factor+resamp_factor)]);
+    }
   }
+  else{
+    time=sXX$time;
+    hplus=sXX$hplus;
+    hcross=sXX$hcross;
+    n=length(hplus);
+  }
+  
+  if (verbose){
+    print(gw_filename)
+    print(sprintf("Number of samples at %s Hz: %s", fs_orig,length(sXX$time)));
+    print(sprintf("Number of samples at %s Hz: %s", fs, n));
+  }
+
+  
+  # remove times corresponding to the post-bounce period (100 ms)
+  if (pbOff==TRUE){
+    true_data=subset(true_data, true_data$time>=0.1);
+    hplus=hplus[time>=0.1];
+    hcross=hcross[time>=0.1];
+    time=time[time>=0.1];
+    n=length(hplus);
+  }
+  
+  # Zero padding
+  padd = floor(0.05*fs+1);   #   50ms zero padding at the start and end
+  time = seq(0,n+2*padd-1)/fs-0.05+time[1];
+  duration = (n+2*padd-1)/fs;
   
   nDet=length(detectors);
   res=list();
   # antenna responses and time delay for each detector
   F=antenna_patterns(dec,ra,t,0,detectors);
+  if (verbose){
+    print("Antenna response matrix : F")
+    print(F)
+  }
   delays=time_delays(dec,ra,t,detectors);
   # Reset reference position to first detector
   delays=delays-delays[1];
   delayLengths=round(delays*fs);
   
-  ### Assign storage ###
-  time = rep(0,n+2*padding);
-  
-  ind1 = 1+padding
-  indn = n+padding
-  time[ind1:indn] = sXX$time
-  t1 = sXX$time[1]   # time at which the GW signal starts
-  tn = sXX$time[n]   # time at which the GW signal ends
-  time[1:padding] = seq(t1-padding/fs_orig,t1-1/fs_orig,by=1/fs_orig);
-  time[(indn+1):(indn+padding)] = seq(tn+1/fs_orig,tn+padding/fs_orig,by=1/fs_orig);
-
   for (k in 1:nDet){
-    signal= rep(0,n+2*padding);
+    hoft = rep(0,n+2*padd);
     Fplus = F[k,1];
     Fcross = F[k,2];
-    startGW=ind1+delayLengths[k];
-    endGW=indn+delayLengths[k];
-    signal[startGW:endGW]= Fplus*sXX$hplus + Fcross*sXX$hcross;
+    startGW=1+padd+delayLengths[k];
+    endGW=n+padd+delayLengths[k];
+    hoft[startGW:endGW]= Fplus*hplus + Fcross*hcross;
     
-    wvf=data.frame("time"=time,"hoft"=signal);
+    wvf=data.frame("time"=time,"hoft"=hoft);
     
     # Plot
     if (actPlot == TRUE){
-      plot(1000*wvf$time,wvf$hoft,type='l',xlab="Time [ms]",ylab="Hoft",
-           main=detectors[k],ylim=c(-3e-22,3e-22))
+      plot(sXX$time,sXX$hplus,type='l',xlab="Time after bounce [s]",ylab="Hoft",
+           main=paste(signal,"in",detectors[k]),panel.first = grid())
+      lines(wvf$time,wvf$hoft,col='red')
+      leg=(c(paste("wvf @",fs_orig),paste("resampled wvf @",fs)))
+      col=c("black","red")
+      legend ("topleft", legend=leg,col=col,pch=c(1,2))
     }
     
     res$wvf=wvf
     res=rename(res,c("wvf"=sprintf("wvf_%s",detectors[k])))
   }
-  res$duration = duration
+  
+  res$duration = duration;
+  res$true_data = true_data;
   
   # Time delays between the arrivals at each detector
   if (verbose==TRUE){
@@ -102,15 +159,13 @@ signal_multiDec = function(dec=30, ra=6, t=1302220800,
 
 
 ########################################################################
-data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LLO","VIR"), 
+data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"), 
                           filter="prewhiten", setseed=0,
                           actPlot=FALSE, verbose=FALSE){
   ######################################################################
   # Inputs:   fs: sampling frequency
-  #           duration: duration (in second) of the output time serie
-  #           wvfs: list of dataframes (time=t, hoft=h(t)) that contain 
-  #                   the signal waveforms sampled at fs
-  #           ampl: multiplication factor to simulate the source distance
+  #           wvfs: list of signals (time=t, hoft=h(t)) sampled at fs
+  #           ampl: multiplication factor (simulates the source distance)
   #           detectors: vector of detectors from which data will be extracted
   #           filter: name of the method
   #              "HP" : The fcut parameter is fixed internally (15 Hz)
@@ -126,18 +181,14 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LL
   #           data_L
   #           ...
   ######################################################################
+  
   n=length(wvfs[[1]]$time)
+  duration=(n-1)/fs
   
   m=length(detectors)
   res=list()
   for (k in 1:m){
     wvf=wvfs[[k]]
-    wvf_size=length(wvf$hoft)
-    
-    if (n<wvf_size){
-      print(sprintf("data_generator: signal waveform duration larger than %f", duration))
-      return()
-    }
     
     # The output vector will be 2 times larger than n
     factor=2
@@ -150,18 +201,11 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LL
     psd=data$psd        # 2 sided PSD
     n_data=length(Y)     # factor x n
     
-    if (verbose==TRUE){
-      print(sprintf("data_generator:size of the output: %d", n))
-      print(sprintf("data_generator:size of the noise : %d", n_data))
-      print(sprintf("data_generator:size of the %s signal: %d", detectors[k], wvf_size))
-      print(sprintf("data_generator:amplitude of the signal: %f", ampl))
-    }
-    
     # Signal addition (centered at the middle of the data vector 
     # to avoid filtering leakage at the beginning and end).
-    ind1=floor((n_data-wvf_size)/2)
+    ind1=floor((n_data-n)/2)
     
-    for (i in 1:wvf_size){
+    for (i in 1:n){
       Y[ind1+i]=Y[ind1+i]+ampl*wvf$hoft[i]
     }
     
@@ -173,20 +217,10 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LL
     }
     
     # generate a time series
-    T = seq(1, n_data, by = 1)
+    T = seq(wvf$time[1], by=1/fs, length=n_data)-duration/2
     
     # select the original data size
-    Tf = seq(1, n, by = 1)
-    
-    for (i in 1:n){
-      Tf[i]=wvf$time[i]
-    }
-    
-    T_wvf=seq(1,wvf_size,by=1)
-    
-    for (i in 1:wvf_size){
-      T_wvf[i]=wvf$time[i]
-    }
+    Tf=wvf$time
     
     Yf = seq(1, n, by = 1)
     YYf = seq(1, n, by = 1)
@@ -200,20 +234,20 @@ data_multiDec = function (fs=4096, wvfs, duration, ampl=1, detectors=c("LHO","LL
       if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
         # Plot for LHO
         plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
-             xlab="Sample",ylab="Hoft",main=detectors[k])
+             xlab="Time [s]",ylab="Hoft",main=detectors[k])
         points(T, YY, col="red", type="l", pch=2);        # (noise + signal) filtered 
         leg = c("noise+signal", "(noise+signal) filtered")
         col = c("black","red")
-        legend (x=T[1]*1.1,y=max(Y)*.9,legend=leg,cex=.8,col=col,pch=c(1,2))
+        legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,2))
         
         plot(Tf, Yf, col="black", type="l", pch=1, panel.first = grid(), 
              xlab="Time [s]",ylab="Hoft", main=detectors[k])
         points(Tf, YYf, col="red", type="l", pch=2);          # (noise + signal) filtered
-        points(T_wvf,(wvf$hoft)*ampl,col="green",type="l",pch=3);  # signal only
+        points(Tf,(wvf$hoft)*ampl,col="green",type="l",pch=3);  # signal only
         
         leg = c("noise", "(noise+signal) filtered", "signal only")
         col = c("black","red","green")
-        legend (x=Tf[1]*1.1,y=max(Yf)*.9,legend=leg,cex=.8,col=col,pch=c(1,3))
+        legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,3))
       
       }else{
         plot (Tf, Yf, type="l", col="black", main=detectors[k])
@@ -303,21 +337,16 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   }
   
   # generate a time series vector sampled at fs
-  Tf = seq(1, n, by = 1)
-  
-  for (i in 1:n){
-    Tf[i]=(i-1)/fs
-  }
+  Tf = seq(0, n-1, by = 1)/fs;
   
   if (actPlot){
     # Time series
-    T = seq(1, n, by = 1)
-    ts.plot(Y); # noise only
-    points(T, Y, col="black", type="l", pch=1, panel.first = grid())
+    T = seq(0, n-1, by = 1)/fs;
+    plot(T, Y, col="black", type="l", pch=1, panel.first = grid())
     points(T, YY, col="red", type="l",pch=2)
-    
-    legend_str=c("simulated noise", "filtered noise")
-    legend (x=0, y=abs(max(Y)), legend=legend_str, col=c("black","red"), pch=c(1,2))   
+  
+    leg=c("simulated noise", "filtered noise")
+    legend (x=0, y=abs(max(Y)), legend=leg, col=c("black","red"), pch=c(1,2))   
     
     # spectrum estimated
     psdest <- pspectrum(Y, Y.frqsamp=fs, ntap.init=NULL, Nyquist.normalize = TRUE, plot=FALSE,verbose=FALSE)
@@ -328,10 +357,8 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     WFT = sqrt(2)*fft(YY)/sqrt(n);
     ymin=10^(ceiling(log10(min(abs(YFT)[1:floor(n/2)])/sqrt(fs))))
     ymax=10^(ceiling(log10(max(abs(YFT)[1:floor(n/2)])/sqrt(fs))))
-    #ymin=1e-24
-    #ymax=2e-21
     plot (freq1, abs(YFT)[1:floor(n/2)]/sqrt(fs), log="xy", type="l", xlab="Frequency", ylab="ASD", 
-          col="grey", xlim=c(1, fs/2), ylim=c(ymin,ymax), pch=1, panel.first = grid())
+         col="grey", xlim=c(1, fs/2), ylim=c(ymin,ymax), pch=1, panel.first = grid())
     
     lines(fs*psdest$freq, sqrt(psdest$spec)/sqrt(fs), col="blue", pch=2)
     
@@ -391,12 +418,12 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     stop(sprintf("Detector %s is not implemented in this code. You may want to use CE1, CE2, ET_B, ET_C, ET_D, aLIGO, ADV, KAGRA or ALIGO",detector))
   }
   
-  n = length(f)
+  n=length(f)
   fmin=f[1]
   if (type==1){
     fmax=f[n]
   } else{
-    fmax=abs(f[n/2+1])}
+    fmax=abs(f[floor(n/2)+1])}
   
   yl=sens[1]
   yr=sens[length(data$V1)]
@@ -409,23 +436,20 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     psd = asd*asd
   }else{
     asd = rep(0, n);
-    asd_1sided = asd_func(abs(f[1:floor(n/2)]))
-    
-    if (length(asd_1sided) != floor(n/2)){
-      print (sprintf("Warning: ASD vector size %d is different from the frequency vector size %d", 
-                     length(asd_1sided), n/2))
-    }
-    
+    asd_1sided = asd_func(abs(f[1:floor(n/2)]));
     
     asd[1]=asd_1sided[1];
-    for(i in 2:(floor(n/2))){
+    for(i in 2:floor(n/2)){
       asd[i]=asd_1sided[i];
       
       # Wraparound frequency: f=0 is the first element (i=1), 
-      # and all elements are symetric around index n/2+1
-      asd[n+2-i]=asd[i]
-    }  
+      # and all elements are symmetric around index n/2+1
+      asd[n+2-i]=asd[i];
+    }
     asd[n/2+1]=asd_func(abs(f[floor(n/2)+1]))
+    if (n%%2==1){
+      asd[n/2+2]=asd[n/2+1];
+    }
     
     # Two sided psd
     asd=asd/sqrt(2);
@@ -483,7 +507,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
   freq2=fs*fftfreq(n)          # two-sided frequency vector
   
   s0 <- sqrt(trapz(freq2, psd))
-  if (verbose==TRUE){
+  if (verbose){
     print(sprintf("filtering: ASD noise rms: %g", s0))
   }
   
@@ -493,7 +517,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
     myfilter=butter(n=5, W=fcut/(fs/2), type="high")
     Y=filtfilt(filt=myfilter, x=X)} 
   else if (method == "AR"){
-    if (psd==0){
+    if (length(psd)==1){
       print("Filtering with AR method cannot be performed because noise psd has not been provided")
     }else{
       # generate another noise TS
@@ -512,31 +536,32 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
       Y=b}
   }
   else if (method == "spectrum"){
-    if (psd[1]==0){
+    if (length(psd)==1){
       print("Filtering with specrum method cannot be performed because noise psd has not been provided")
     }else{
       # generate another noise TS
       X1 = rnorm(n, mean=0, sd=1);          # Gaussian white noise
       XX1 = fft(X1);                        # FFT computing
-      XXX1 = XX1*sqrt(psd);                 # Coloring
+      XXX1 = XX1*sqrt(fs*psd);                 # Coloring
       Y1 = fft(XXX1, inverse = TRUE);       # FFT inverse
-      Y1 = Re(Y1)*sqrt(fs)/n;               # noise in time domain
+      Y1 = Re(Y1)/n;               # noise in time domain
       
       # compute the PSD
-      psdest <- pspectrum(Y1, Y1.frqsamp=fs, ntap.init=6, Nyquist.normalize = TRUE, 
+      psdest <- pspectrum(Y1, Y1.frqsamp=fs, ntap.init=6, Nyquist.normalize=TRUE,
                           plot=FALSE,verbose = FALSE)
       psdwhitening=rep(0, n);
-      for(i in 1:(floor(n/2))){
-        psdwhitening[i]=psdest$spec[i]
-        psdwhitening[n+1-i]=psdest$spec[i]
+      for(i in 1:floor(n/2)){
+        psdwhitening[i]=psdest$spec[i]/fs
+        psdwhitening[n+1-i]=psdest$spec[i]/fs
       }
+      if (n%%2==1){
+        psdwhitening[(n+1)/2]=psdwhitening[(n-1)/2]
+      }
+      
       a = fft(X)                        # FFT computing and normalization
-      b = a/sqrt(psdwhitening)       # whitening
+      b = a/sqrt(fs*psdwhitening)       # whitening
       c = fft(b, inverse = TRUE);       # FFT inverse
       Y = s0*Re(c)/n;                   # Normalization factor of the 2 FFTs
-      
-      #    myfilter=butter(n=4,W=10/(fs/2),type="high")
-      #    YY=filtfilt(filt=myfilter,x=YY)
     }
   }
   else if (method == "prewhiten"){
@@ -718,17 +743,13 @@ compute_cor = function(h1,h2,psd=1,fs=4096){
   freq=fs*fftfreq(2*T)
   freq[1]=0.001
   freq=freq[1:T]   # frequencies used to sample the fourier series
+
+  integrand=(Conj(h1)*h2+h1*Conj(h2))/psd
+  inner_p=Re(trapz(freq,integrand))
   
-  N=100   # number of repetitions to get the average correlation value
-  r=rep(0,N);
-  for (n in 1:N){
-    integrand=(Conj(h1)*h2+h1*Conj(h2))/psd
-    inner_p=Re(trapz(freq,integrand))
-    
-    norm1=Re(trapz(freq,2*abs(h1)^2/psd))
-    norm2=Re(trapz(freq,2*abs(h2)^2/psd))
-    
-    r[n] = inner_p/sqrt(norm1*norm2);
-  }
-  return(mean(r))
+  norm1=Re(trapz(freq,2*abs(h1)^2/psd))
+  norm2=Re(trapz(freq,2*abs(h2)^2/psd))
+  
+  r=inner_p/sqrt(norm1*norm2);
+  return(r)
 }

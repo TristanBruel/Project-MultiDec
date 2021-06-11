@@ -10,8 +10,8 @@ library(signal)
 ########################################################################
 timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
                        skyPosition,integLength,offsetLength,transientLength,
-                       freqBand=c(0,Inf),windowType="hann",
-                       verbose=TRUE, actPlot=TRUE,logPow=TRUE){
+                       freqBand=c(0,Inf),windowType="hann",startTime=0,
+                       threshold=0,verbose=FALSE, actPlot=FALSE,logPow=TRUE){
   ######################################################################
   # Inputs :  fs: sampling frequency
   #           wData: matrix of time-domain whitened data
@@ -28,18 +28,21 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   #           transientLength: number of samples to ignore (beginning and end)
   #           freqBand: band of frequencies to include in the maps
   #           windowType: window type to be used in FFTs ('hann', 'bartlett' or 'modifiedHann')
+  #           startTime: (optional) time of detection in the first detector (in s)
+  #           threshold: percentage of TF maps pixels to discard in thresholding
   #
-  # Output : time frequency map
+  # Output :  maps of plus energy, cross energy, 
+  #           standard and soft constraint likelihood
   ######################################################################
   
   ### Command line arguments ###
   nDet=length(detectors);
-  if (length(wData) < nDet){
+  if (dim(wData)[2] < nDet){
     stop("Number of detectors is inconsistent with the data provided")
   }
   nDat=length(wData[,1]);
   if (verbose){
-    print(c("Number of samples : ",nDat))
+    print(sprintf("Number of samples : ",nDat))
   }
   
   # Vector of one-sided frequencies
@@ -49,7 +52,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   nFreqBins=length(inbandFreq);
   psd=psd[freqInd,];
   if (verbose){
-    print(c("Number of positive frequency bins : ",nFreqBins))
+    print(sprintf("Number of positive frequency bins : %s",nFreqBins))
   }
   
   ### Partition (no overlapping yet) ###
@@ -60,13 +63,13 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   # Number of segments
   nSeg=length(startInd);
   
-  # Fractionnal offset of consecutive segments
+  # Fractional offset of consecutive segments
   offset=offsetLength/integLength;
   
   # Number of time bins (max covers the case in which there is only one segment)
   nTimeBins=max(nSeg-1,1)/offset;
   if (verbose){
-    print(c("Number of time bins",nTimeBins))
+    print(sprintf("Number of time bins : %s",nTimeBins))
     }
   
   ### Detectors information ###
@@ -86,11 +89,8 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   intDelayLengths=round(delayLengths);
   residualDelays=(delayLengths-intDelayLengths)/fs;
   
-  # Create real time indices
-  timeIndices=zeros(nTimeBins,nDet);   # one column per detector
-  for (k in 1:nDet){
-    timeIndices[,k]=(seq(0,nTimeBins-1)*offsetLength/fs+delays[k])*1000;
-  }
+  # Create real time vector
+  timeIndices=(seq(0,nTimeBins-1)*offsetLength+integLength/2)/fs+startTime;
   
   ### Storage ###
   TFMapFull=array(dim=c(integLength,nTimeBins,nDet));  # contains all frequencies
@@ -133,9 +133,9 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
         offsetStopInd=segStopInd+integLength*(j-1)*offset;
         data=wData[offsetStartInd:offsetStopInd,k];
         # Optimal rescaling to prevent numerical issues
-        rescale=stats::sd(data);
-        data=data/rescale;  # Data now has standard deviation 1
-        data=data-mean(data);
+        #rescale=stats::sd(data);
+        #data=data/rescale;  # Data now has standard deviation 1
+        #data=data-mean(data);
         dataArray=matrix(data,nrow=integLength);
         timeBins=seq(j,nTimeBins,by=1/offset);
         TFMapFull[,timeBins,k]=mvfft(windowData*dataArray);
@@ -150,8 +150,8 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
       detSpec[,,k]=log10(sqrt(detSpec[,,k]));
     }
     if (actPlot){
-      image.plot(timeIndices[,k],inbandFreq,t(detSpec[,,k]),
-                 xlab="Time [ms]",ylab="Frequency [Hz]",
+      image.plot(timeIndices+delays[k],inbandFreq,t(detSpec[,,k]),
+                 xlab="Time [s]",ylab="Frequency [Hz]",
                  main=c(detectors[k],"Spectrogram"))
     }
   }
@@ -195,9 +195,9 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
         offsetStopInd=segStopInd+integLength*(j-1)*offset;
         data=wData[offsetStartInd:offsetStopInd,k];
         # Optimal rescaling to prevent numerical issues
-        rescale=stats::sd(data);
-        data=data/rescale;  # Data now has standard deviation 1
-        data=data-mean(data);
+        #rescale=stats::sd(data);
+        #data=data/rescale;  # Data now has standard deviation 1
+        #data=data-mean(data);
         dataArray=matrix(data,nrow=integLength);
         timeBins=seq(j,nTimeBins,by=1/offset);
         TFMapFull[,timeBins,k]=mvfft(windowData*dataArray);
@@ -228,15 +228,16 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   ### Compute likelihood maps ###
   # Plus energy
   plusLikelihood=(1/Mpp)*(Re(wFpTFMap)^2+Im(wFpTFMap)^2);
-  
+
   # Cross energy
   crossLikelihood=(1/Mcc)*(Re(wFcTFMap)^2+Im(wFcTFMap)^2);
-
+  
   # Standard likelihood
   stdLikelihood=plusLikelihood+crossLikelihood;
   
   # Soft constraint likelihood
   softLikelihood=plusLikelihood+epsilon*crossLikelihood;
+  
   
   # log-scale transformation
   if(logPow){
@@ -248,17 +249,18 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   
   ### Plot Maps ###
   if (actPlot){
-    image.plot(timeIndices[,1],inbandFreq,t(plusLikelihood),
-               xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Plus energy")
-    image.plot(timeIndices[,1],inbandFreq,t(crossLikelihood),
-               xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Cross energy")
-    image.plot(timeIndices[,1],inbandFreq,t(stdLikelihood),
-               xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Standard likelihood")
-    image.plot(timeIndices[,1],inbandFreq,t(softLikelihood),
-               xlab = "Time [ms]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
+    image.plot(timeIndices,inbandFreq,t(plusLikelihood),
+               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Plus energy")
+    image.plot(timeIndices,inbandFreq,t(crossLikelihood),
+               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Cross energy")
+    image.plot(timeIndices,inbandFreq,t(stdLikelihood),
+               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Standard likelihood")
+    image.plot(timeIndices,inbandFreq,t(softLikelihood),
+               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
   }
-  rplus=list(x=timeIndices[,1],y=inbandFreq,z=t(plusLikelihood))
-  rcross=list(x=timeIndices[,1],y=inbandFreq,z=t(crossLikelihood))
-  rstd=list(x=timeIndices[,1],y=inbandFreq,z=t(stdLikelihood))
-  return(list(stdLike=rstd,Ep=rplus,Ec=rcross))
+  rplus=list(x=timeIndices,y=inbandFreq,z=t(plusLikelihood))
+  rcross=list(x=timeIndices,y=inbandFreq,z=t(crossLikelihood))
+  rstd=list(x=timeIndices,y=inbandFreq,z=t(stdLikelihood))
+  rsoft=list(x=timeIndices,y=inbandFreq,z=t(softLikelihood))
+  return(list(Eplus=rplus,Ecross=rcross,std=rstd,soft=rsoft))
 }
