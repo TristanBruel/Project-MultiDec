@@ -54,9 +54,9 @@ name="s20.0--LS220"
 #name="s25.0--LS220"
 #name="s40.0--LS220"
 #detectors=["LHO","LLO","VIR"]
-detectors=["LHO"]
-method="singleDec"
-#method="multiDec"
+detectors=["multiDec"]
+#method="singleDec"
+method="multiDec"
 
 try:
     os.stat(name)
