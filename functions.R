@@ -420,9 +420,8 @@ covpbb = function(r, mod, l=200, p=90, fs=16384, movGmode = 11,
   maxfs = as.data.frame(maxfs);
   
   if(actPlot == TRUE){
+    image.plot(r$x,r$y,r$z,xlab="Time [s]",ylab="Frequency [Hz]")
     if(gmode == "left"){
-      print(length(timefreq))
-      print(length(maxfs$maxf_L))
       points(timefreq, maxfs$maxf_L, col='black',type="p")
     }else if (gmode == "right"){
       points(timefreq, maxfs$maxf_R, col='black')
@@ -723,8 +722,8 @@ covpbb2 = function(r, mod, l=200, p=90, fs=16384, movGmode = 11,
   maxfs = as.data.frame(maxfs);
   
   if(actPlot == TRUE){
+    image.plot(r$x,r$y,r$z,xlab="Time [s]",ylab="Frequency [Hz]")
     if(gmode == "left"){
-      image.plot(r$x,r$y,r$z)
       points(timefreq, maxfs$maxf_L, col='black',type="p")
     }else if (gmode == "right"){
       points(timefreq, maxfs$maxf_R, col='black')

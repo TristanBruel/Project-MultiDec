@@ -42,12 +42,14 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   index=which(meda$name == signal);
   gw_filename=paste(folder,meda$wvf_name[index],sep="");
   sXX = read.table(gw_filename);
-  # 2D or 3D simulation
-  if (length(sXX)==2){
-    sXX$V3 = rep(0,length(sXX$V1));
-    t_bounce=meda$tb[index];
-    
-    # True data to define the ratio Mpns / Rpns^2 (for g-mode)
+  colnames(sXX) = c ("time","hplus","hcross");
+  
+  fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
+  
+  t_bounce=meda$tb[index];
+  
+  # True data to define the ratio Mpns / Rpns^2 (for g-mode)
+  if (signal != "KURODA"){
     truedata_filename=paste(folder,"Ratios/",meda$truedata_name[index],sep="")
     true_data = read.table(truedata_filename,sep = ",",comment.char = "#",header=TRUE);
     if (signal != "s20.0--SFHo"){
@@ -57,12 +59,8 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
     true_data = as.data.frame(true_data);
   }
   else{
-    t_bounce=0
-    true_data=NULL
+    true_data = NULL;
   }
-  
-  colnames(sXX) = c ("time","hplus","hcross");
-  fs_orig = round(1/(sXX$time[2]-sXX$time[1]));
   
   # Time shift such that t_bounce=0
   sXX$time=sXX$time-t_bounce;
@@ -105,7 +103,6 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   # Zero padding
   padd = floor(0.05*fs+1);   #   50ms zero padding at the start and end
   time = seq(0,n+2*padd-1)/fs-0.05+time[1];
-  duration = (n+2*padd-1)/fs;
   
   nDet=length(detectors);
   res=list();
@@ -128,23 +125,22 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
     endGW=n+padd+delayLengths[k];
     hoft[startGW:endGW]= Fplus*hplus + Fcross*hcross;
     
-    wvf=data.frame("time"=time,"hoft"=hoft);
-    
     # Plot
     if (actPlot == TRUE){
       plot(sXX$time,sXX$hplus,type='l',xlab="Time after bounce [s]",ylab="Hoft",
-           main=paste(signal,"in",detectors[k]),panel.first = grid())
-      lines(wvf$time,wvf$hoft,col='red')
+           main=paste(signal,"in",detectors[k]),panel.first = grid(),
+           xlim=c(min(sXX$time,time),max(sXX$time,time)))
+      lines(time,hoft,col='red')
       leg=(c(paste("wvf @",fs_orig),paste("resampled wvf @",fs)))
       col=c("black","red")
       legend ("topleft", legend=leg,col=col,pch=c(1,2))
     }
     
-    res$wvf=wvf
+    res$wvf=hoft
     res=rename(res,c("wvf"=sprintf("wvf_%s",detectors[k])))
   }
   
-  res$duration = duration;
+  res$time=time
   res$true_data = true_data;
   
   # Time delays between the arrivals at each detector
@@ -182,7 +178,7 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
   #           ...
   ######################################################################
   
-  n=length(wvfs[[1]]$time)
+  n=length(wvfs$time)
   duration=(n-1)/fs
   
   m=length(detectors)
@@ -206,7 +202,7 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
     ind1=floor((n_data-n)/2)
     
     for (i in 1:n){
-      Y[ind1+i]=Y[ind1+i]+ampl*wvf$hoft[i]
+      Y[ind1+i]=Y[ind1+i]+ampl*wvf[i]
     }
     
     # filter the time series if requested
@@ -217,10 +213,10 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
     }
     
     # generate a time series
-    T = seq(wvf$time[1], by=1/fs, length=n_data)-duration/2
+    T = seq(wvfs$time[1], by=1/fs, length=n_data)-duration/2
     
     # select the original data size
-    Tf=wvf$time
+    Tf=wvfs$time
     
     Yf = seq(1, n, by = 1)
     YYf = seq(1, n, by = 1)
@@ -232,7 +228,6 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
     
     if (actPlot){
       if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
-        # Plot for LHO
         plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
              xlab="Time [s]",ylab="Hoft",main=detectors[k])
         points(T, YY, col="red", type="l", pch=2);        # (noise + signal) filtered 
@@ -243,7 +238,7 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
         plot(Tf, Yf, col="black", type="l", pch=1, panel.first = grid(), 
              xlab="Time [s]",ylab="Hoft", main=detectors[k])
         points(Tf, YYf, col="red", type="l", pch=2);          # (noise + signal) filtered
-        points(Tf,(wvf$hoft)*ampl,col="green",type="l",pch=3);  # signal only
+        points(Tf,wvf*ampl,col="green",type="l",pch=3);  # signal only
         
         leg = c("noise", "(noise+signal) filtered", "signal only")
         col = c("black","red","green")
