@@ -1,0 +1,11 @@
+# Nickname, wvf filename, ratio filename, t_bounce [s]
+s11.2--LS220,gw_s11.2--LS220--GravA.dat,s11.2--LS220--GravA_mass_r.csv,0.134
+s15.0--GShen,gw_s15.0--GShen--GravA.dat,s15.0--GShen--GravA_mass_r.csv,0.254
+s15.0--LS220,gw_s15.0--LS220--GravA.dat,s15.0--LS220--GravA_mass_r.csv,0.242
+s15.0--SFHo,gw_s15.0--SFHo--GravA.dat,s15.0--SFHo--GravA_mass_r.csv,0.243
+s20.0--LS220,gw_s20.0--LS220--GravA.dat,s20.0--LS220--GravA_mass_r.csv,0.185
+s20.0--SFHo,s20-gw_10kpc16384.dat,s20_data_g2.dat,0.180
+s25.0--LS220,gw_s25.0--LS220--GravA.dat,s25.0--LS220--GravA_mass_r.csv,0.398
+s40.0--LS220,gw_s40.0--LS220.dat,s40.0--LS220_mass_r.csv,0.296
+s20_v1,gw_s20_v1.dat,s20_data_g2.dat,0.180
+KURODA,KURODA_TM1_H_resampled.dat,NULL,0
