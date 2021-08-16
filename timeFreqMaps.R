@@ -11,7 +11,7 @@ library(signal)
 timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
                        skyPosition,integLength,offsetLength,transientLength,
                        freqBand=c(0,Inf),windowType="hann",startTime=0,
-                       threshold=0,verbose=FALSE, actPlot=FALSE,logPow=TRUE){
+                       verbose=FALSE, actPlot=FALSE,logPow=TRUE){
   ######################################################################
   # Inputs :  fs: sampling frequency
   #           wData: matrix of time-domain whitened data
@@ -42,7 +42,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   }
   nDat=length(wData[,1]);
   if (verbose){
-    print(sprintf("Number of samples : ",nDat))
+    print(sprintf("Number of samples : %s",nDat))
   }
   
   # Vector of one-sided frequencies
@@ -55,7 +55,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
     print(sprintf("Number of positive frequency bins : %s",nFreqBins))
   }
   
-  ### Partition (no overlapping yet) ###
+  ### Partition (no overlapping at this point) ###
   startInd=seq(transientLength+1,nDat-transientLength-integLength+1,by=integLength);
   stopInd=startInd+integLength-1;
   segmentIndices=cbind(startInd,stopInd);
@@ -68,6 +68,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   
   # Number of time bins (max covers the case in which there is only one segment)
   nTimeBins=max(nSeg-1,1)/offset;
+  nTimeBins=as.integer(nTimeBins);
   if (verbose){
     print(sprintf("Number of time bins : %s",nTimeBins))
     }
@@ -258,9 +259,9 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
     image.plot(timeIndices,inbandFreq,t(softLikelihood),
                xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
   }
-  rplus=list(x=timeIndices,y=inbandFreq,z=t(plusLikelihood))
-  rcross=list(x=timeIndices,y=inbandFreq,z=t(crossLikelihood))
-  rstd=list(x=timeIndices,y=inbandFreq,z=t(stdLikelihood))
-  rsoft=list(x=timeIndices,y=inbandFreq,z=t(softLikelihood))
+  rplus=list(t=timeIndices,f=inbandFreq,E=t(plusLikelihood))
+  rcross=list(t=timeIndices,f=inbandFreq,E=t(crossLikelihood))
+  rstd=list(t=timeIndices,f=inbandFreq,E=t(stdLikelihood))
+  rsoft=list(t=timeIndices,f=inbandFreq,E=t(softLikelihood))
   return(list(Eplus=rplus,Ecross=rcross,std=rstd,soft=rsoft))
 }

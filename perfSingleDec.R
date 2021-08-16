@@ -27,7 +27,7 @@ s2 = "~ f + I(f^2) - 1";
 Xm  = model.matrix(eval(parse(text=eval(parse(text=mu3)))), fits_data);
 Xs  = model.matrix(eval(parse(text=eval(parse(text=s2)))), fits_data);
 
-fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = TRUE);
+fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 
 ############################
 ### Algorithm parameters ###
@@ -43,68 +43,83 @@ dec=60
 ra=8
 t=1302220800
 
-detectors=c("LHO","LLO","VIR")
 detectors=c("LHO")
-nDet=length(detectors)
-#signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-#          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220")
-signal_name=c("s20.0--LS220")
+
+signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
+          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220")
+signals=c("s20.0--LS220")
+
 freq_min=200
 distance_step=0.5
 
 fs=4096
 filtering_method="prewhiten"
 
-# loop over N generation of noisy data and add signal
-
+# loop over N generation of noisy data
 N=100
-N=1
-dist_nb=40
+N=5
+dist_nb=60
 dist_nb=1
-result<-array(0,c(nrow=N*dist_nb,ncol=6,nDet))
+result<-matrix(nrow=N*dist_nb,ncol=6)
 
-wvfs=signal_multiDec(dec,ra,t,fs,signal_name,detectors=detectors,pbOff=TRUE)
-true_data=wvfs$true_data
-
-l = 200   # interval length to use for each FFT
-p = 90   # overlapping percentage
-
-# To use always the same random noise for all waveforms % detectors
-set.seed(1)
-
-for (j in 1:dist_nb){
-  dist = 1+(j-1)*distance_step
-  dist=10
-  for (i in 1:N){
-    d=data_multiDec(fs,wvfs,ampl=10/dist,detectors=detectors, 
-                       filter=filtering_method, setseed=0,
-                       actPlot=FALSE, verbose=FALSE);
-    for (k in 1:nDet){
-      r=specPdgrm(d[[k]]$y,d[[k]]$t,l=l,p=p,fs=fs,actPlot=TRUE,method='ar')
+for (signal_name in signals){
+  
+  wvfs=signal_multiDec(dec,ra,t,fs,signal=signal_name,detectors=detectors,
+                       pbOff=TRUE,actPlot=FALSE,verbose=TRUE)
+  true_data=wvfs$true_data
+  
+  l = 200L   # interval length to use for each FFT
+  p = 90L   # overlapping percentage
+  
+  # To use always the same random noise for all waveforms % detectors
+  set.seed(1)
+  
+  for (j in 1:dist_nb){
+    dist = 1+(j-1)*distance_step
+    dist=15
+    
+    for (i in 1:N){
+      d=data_multiDec(fs,wvfs,ampl=10/dist,detectors=detectors, 
+                         filter=filtering_method, setseed=0,
+                         actPlot=FALSE, verbose=FALSE);
       
+      # remove zero padding to get signal at the very beginning of the spectro
+      nopadd=subset(d[[1]],d[[1]]$t>=0.1);
+      
+      r=specPdgrm(nopadd$y,nopadd$t,l=l,p=p,fs=fs,method='ar',
+                  actPlot=TRUE,main=paste(signal_name,detectors[1]));
+      
+      #r=thresh(r,threshold=0.05,actPlot=FALSE);
+      
+      max=findGmodes(r, um_R=0, dm_R=8, um_L=8, dm_L=0, m_R=8, m_L=8, 
+                     initfreq_R=c(1000,1700), initfreq_L=c(200,500), 
+                     testSlope=FALSE, actPlot=TRUE);
       out = covpbb(r, mod=fit, l=l, p=p, fs=fs,
-                   um_L = 8, dm_L = 0, m_L = 8, initfreq_L = c(200, 500),
+                   um_L = 8, dm_L = 0, m_L = 8, initfreq_L = c(freq_min, 500),
                    um_R = 0, dm_R = 8, m_R = 8, initfreq_R = c(1000, 1700),
                    gmode = gmode, true_data=true_data, actPlot=FALSE,
                    limFreq = c(1000));
       
-      result[i+(j-1)*N,1,k]=dist
-      result[i+(j-1)*N,2,k]=out$covpbb[1,1]
-      result[i+(j-1)*N,3,k]=out$covpbb[1,2]
-      result[i+(j-1)*N,4,k]=out$residual[1,1]
-      result[i+(j-1)*N,5,k]=out$residual[1,2]
-      result[i+(j-1)*N,6,k]=out$residual[1,3]
+      #out = covpbb_poly(r, N=3, mod=fit, setStart=FALSE, m_L=2, initfreq_L=c(freq_min, 500),
+      #                  true_data=true_data, limFreq=c(1000),
+      #                  actPlot=TRUE);
+      
+      result[i+(j-1)*N,1]=dist
+      result[i+(j-1)*N,2]=out$covpbb[1,1]
+      result[i+(j-1)*N,3]=out$covpbb[1,2]
+      result[i+(j-1)*N,4]=out$residual[1,1]
+      result[i+(j-1)*N,5]=out$residual[1,2]
+      result[i+(j-1)*N,6]=out$residual[1,3]
+      
     }
-  }
-  for (k in 1:nDet){
+    
     ind1=1+(j-1)*N
     ind2=N+(j-1)*N
     print(sprintf("signal %s in detector %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
-                  signal_name, detectors[k], dist, mean(result[ind1:ind2,2,k]), median(result[ind1:ind2,2,k])))
+                  signal_name, detectors[1], dist, mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])))
   }
-}
-for (k in 1:nDet){
-  #filename=sprintf("results/singleDec/results_AA_%s_f2_%s_%s.txt", 
-  #                filtering_method, signal_name, detectors[k])
-  #write.table(result[,,k], file=filename, sep=" ", row.names=FALSE, col.names=FALSE)
+  
+  filename=sprintf("results/singleDec/skyPos2/results_AA_%s_f2_%s_%s.txt", 
+                  filtering_method, signal_name, detectors[1])
+  #write.table(result, file=filename, sep=" ", row.names=FALSE, col.names=FALSE)
 }

@@ -49,7 +49,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   t_bounce=meda$tb[index];
   
   # True data to define the ratio Mpns / Rpns^2 (for g-mode)
-  if (signal != "KURODA"){
+  if ((signal != "KURODA") & (signal != "sinus")){
     truedata_filename=paste(folder,"Ratios/",meda$truedata_name[index],sep="")
     true_data = read.table(truedata_filename,sep = ",",comment.char = "#",header=TRUE);
     if (signal != "s20.0--SFHo"){
@@ -144,7 +144,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   res$true_data = true_data;
   
   # Time delays between the arrivals at each detector
-  if (verbose==TRUE){
+  if ((verbose==TRUE) & (nDet>1)){
     for (k in 2:nDet){
       print(sprintf("Time shift between %s and %s is %s ms",detectors[k],
                     detectors[1],1000*delays[k]))
@@ -409,8 +409,15 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
+  if ((detector=="ET1") || (detector=="ET2") || (detector=="ET3")){
+    psd_filename=sprintf("PSD/ET_D_sensitivity.txt")
+    data=read.table(psd_filename);
+    sens=data$V4   # HF + LF
+    cutoff=1e-44}   # Design
+  
   if (exists("sens")==FALSE){
-    stop(sprintf("Detector %s is not implemented in this code. You may want to use CE1, CE2, ET_B, ET_C, ET_D, aLIGO, ADV, KAGRA or ALIGO",detector))
+    stop(sprintf("Detector %s is not implemented in this code. 
+                 You may want to use CE1, CE2, ET_B, ET_C, ET_D, aLIGO, ADV, KAGRA or ALIGO",detector))
   }
   
   n=length(f)

@@ -28,7 +28,7 @@ s2 = "~ f + I(f^2) - 1";
 Xm  = model.matrix(eval(parse(text=eval(parse(text=mu3)))), fits_data);
 Xs  = model.matrix(eval(parse(text=eval(parse(text=s2)))), fits_data);
 
-fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = TRUE);
+fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 
 ############################
 ### Algorithm parameters ###
@@ -46,83 +46,96 @@ t=1302220800
 skyPosition=c(dec,ra,t)
 
 detectors=c("LHO","LLO","VIR")
+detectors=c("ET1","ET2")
 nDet=length(detectors)
-#signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-#          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220")
-signal_name=c("s20.0--LS220")
+
+signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
+          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220")
+signals = c("s20.0--LS220")
+
 freq_min=200
-distance_step=0.5
+distance_step=3
 
 fs=4096
 filtering_method="prewhiten"
 
-# loop over N generation of noisy data and add signal
+# loop over N generation of noisy data
 
 N=100
-N=1
-dist_nb=40
-dist_nb=1
+#N=1
+dist_nb=60
+#dist_nb=1
 result<-array(0,c(nrow=N*dist_nb,ncol=6))
 
-wvfs=signal_multiDec(dec,ra,t,fs,signal_name,pbOff=TRUE,actPlot=FALSE)
-true_data=wvfs$true_data
-startTime = 0.1   # signal starts 100ms after bounce (t=0)
-L = fs*wvfs$duration+1   # number of samples
+for (signal_name in signals){
+  
+  wvfs = signal_multiDec(dec,ra,t,fs,signal=signal_name,detectors=detectors,
+                         pbOff=TRUE,actPlot=FALSE,verbose=TRUE)
+  true_data = wvfs$true_data
+  startTime = 0.1   # signal starts 100ms after bounce (t=0)
+  L = length(wvfs$time)   # number of samples
+  
+  l = 400L   # interval length to use for each FFT
+  p = 90L   # overlapping percentage
+  offset = as.integer(round((1-p/100)*l))   # offset between consecutive FTs
+  transient = as.integer(0.05*fs+1);   # samples to ignore at the start and end (50ms)
+  
+  wData = matrix(0,nrow = L, ncol = nDet);
+  psd = matrix(0,nrow = l/2+1, ncol = nDet);
+  freq = fs*seq(0,1/2,by=1/l);
+  
+  # To use always the same random noise for all waveforms % detectors
+  set.seed(1)
+  
+  for (j in 1:dist_nb){
+    dist = 1+(j-1)*distance_step
+    #dist=100
+    for (i in 1:N){
+      d = data_multiDec(fs,wvfs,ampl=10/dist,detectors=detectors, 
+                      filter=filtering_method, setseed=0,
+                      actPlot=FALSE, verbose=FALSE);
+      
+      for (k in 1:nDet){
+        psd[,k] = PSD_fromfiles(freq,1,detectors[k]);
+        wData[,k] = d[[k]]$y;   # prewhiten data
+        wData[,k] = wData[,k]/sqrt(mean(psd[,k]));
+      }
+      
+      likelihoods = timeFreqMap(fs,wData,detectors=detectors,psd,skyPosition,l,offset,transient,
+                              freqBand=c(0,2000),windowType='modifiedHann',
+                              startTime=startTime,logPow=TRUE,
+                              actPlot=FALSE,verbose=FALSE);
+      r = likelihoods$std;
+      ### time window : 0 to 1s ###
+      r2 = list();
+      r2$t = subset(r$t, r$t<=1.5);
+      r2$f = r$f;
+      r2$E = r$E[1:length(r2$t),]
 
-l = 200   # interval length to use for each FFT
-p = 90   # overlapping percentage
-offset = (1-p/100)*l   # offset between consecutive FTs
-transient = floor(0.05*fs+1);   # samples to ignore at the start and end (50ms)
-
-wData = matrix(0,nrow = L, ncol = nDet);
-psd = matrix(0,nrow = l/2+1, ncol = nDet);
-freq=fs*seq(0,1/2,by=1/l);
-
-# To use always the same random noise for all waveforms % detectors
-set.seed(1)
-
-for (j in 1:dist_nb){
-  dist = 1+(j-1)*distance_step
-  dist=10
-  for (i in 1:N){
-    d=data_multiDec(fs,wvfs,ampl=10/dist,detectors=c("LHO","LLO","VIR"), 
-                    filter=filtering_method, setseed=0,
-                    actPlot=FALSE, verbose=FALSE);
-    
-    for (k in 1:nDet){
-      psd[,k]=PSD_fromfiles(freq,1,detectors[k])
-      wData[,k] = d[[k]]$y;   # prewhiten data
-      wData[,k] = wData[,k]/sqrt(mean(psd[,k]));
+      #r2 = thresh_abs(r2,limit=2.3,actPlot=TRUE);
+      
+      #max = findGmodes_poly(r2, N=5, setStart=TRUE, m_L=2, initfreq_L=c(freq_min,500), actPlot=TRUE);
+      #max2 = findGmodes_LASSO(r2, lambda=1, setStart=FALSE, m_L=2, initfreq_L=c(freq_min,500), actPlot = TRUE);
+      
+      out = covpbb_poly(r2, mod=fit, setStart=FALSE, m_L=2, initfreq_L=c(freq_min, 500),
+                        true_data=true_data, limFreq=c(1000),
+                        actPlot=FALSE);
+      
+      result[i+(j-1)*N,1]=dist
+      result[i+(j-1)*N,2]=out$covpbb[1,1]
+      result[i+(j-1)*N,3]=out$covpbb[1,2]
+      result[i+(j-1)*N,4]=out$residual[1,1]
+      result[i+(j-1)*N,5]=out$residual[1,2]
+      result[i+(j-1)*N,6]=out$residual[1,3]
     }
     
-    likelihoods=timeFreqMap(fs,wData,detectors,psd,skyPosition,l,offset,transient,
-                            freqBand=c(0,2000),windowType='modifiedHann',
-                            startTime=startTime,logPow=TRUE,
-                            actPlot=TRUE,verbose=FALSE)
-    r=likelihoods$std
-    
-    out = covpbb2(r, mod=fit, l=l, p=p, fs=fs,
-                 um_L = 2, dm_L = 0, m_L = 8, initfreq_L = c(200, 500),
-                 um_R = 0, dm_R = 8, m_R = 8, initfreq_R = c(1000, 1700),
-                 gmode = gmode, true_data=true_data, actPlot=FALSE,
-                 limFreq = c(1000));
-    
-    result[i+(j-1)*N,1]=dist
-    result[i+(j-1)*N,2]=out$covpbb[1,1]
-    result[i+(j-1)*N,3]=out$covpbb[1,2]
-    result[i+(j-1)*N,4]=out$residual[1,1]
-    result[i+(j-1)*N,5]=out$residual[1,2]
-    result[i+(j-1)*N,6]=out$residual[1,3]
-  }
-  for (k in 1:nDet){
     ind1=1+(j-1)*N
     ind2=N+(j-1)*N
     print(sprintf("signal %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
                   signal_name, dist, mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])))
+  
   }
-}
-for (k in 1:nDet){
-  #filename=sprintf("results/multiDec/results_AA_%s_f2_%s_%s.txt", 
-  #                 filtering_method, signal_name, "multiDec")
+  filename=sprintf("results/multiDec/EinsteinTelescope/results_AA_%s_f2_%s_multiDec.txt", 
+                   filtering_method, signal_name)
   #write.table(result, file=filename, sep=" ", row.names=FALSE, col.names=FALSE)
 }
