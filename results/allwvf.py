@@ -73,7 +73,7 @@ def smooth(y, sigma):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-inputfolder = "multiDec/l400"
+inputfolder = "multiDec/HLV"
 
 #detectors = ["LHO"]
 detectors = ["multiDec"]
