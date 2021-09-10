@@ -57,7 +57,7 @@ filtering_method="prewhiten"
 
 # loop over N generation of noisy data
 N=100
-N=5
+N=1
 dist_nb=60
 dist_nb=1
 result<-matrix(nrow=N*dist_nb,ncol=6)
@@ -72,11 +72,11 @@ for (signal_name in signals){
   p = 90L   # overlapping percentage
   
   # To use always the same random noise for all waveforms % detectors
-  set.seed(1)
+  set.seed(74)
   
   for (j in 1:dist_nb){
     dist = 1+(j-1)*distance_step
-    dist=15
+    dist=3
     
     for (i in 1:N){
       d=data_multiDec(fs,wvfs,ampl=10/dist,detectors=detectors, 
@@ -91,18 +91,15 @@ for (signal_name in signals){
       
       #r=thresh(r,threshold=0.05,actPlot=FALSE);
       
-      max=findGmodes(r, um_R=0, dm_R=8, um_L=8, dm_L=0, m_R=8, m_L=8, 
-                     initfreq_R=c(1000,1700), initfreq_L=c(200,500), 
-                     testSlope=FALSE, actPlot=TRUE);
+      #max=findGmodes(r, um_R=0, dm_R=8, um_L=8, dm_L=0, m_R=8, m_L=8, 
+      #               initfreq_R=c(1000,1700), initfreq_L=c(200,500), 
+      #               testSlope=FALSE, actPlot=TRUE);
       out = covpbb(r, mod=fit, l=l, p=p, fs=fs,
                    um_L = 8, dm_L = 0, m_L = 8, initfreq_L = c(freq_min, 500),
                    um_R = 0, dm_R = 8, m_R = 8, initfreq_R = c(1000, 1700),
-                   gmode = gmode, true_data=true_data, actPlot=FALSE,
+                   gmode = gmode, true_data=true_data, actPlot=TRUE,
                    limFreq = c(1000));
-      
-      #out = covpbb_poly(r, N=3, mod=fit, setStart=FALSE, m_L=2, initfreq_L=c(freq_min, 500),
-      #                  true_data=true_data, limFreq=c(1000),
-      #                  actPlot=TRUE);
+
       
       result[i+(j-1)*N,1]=dist
       result[i+(j-1)*N,2]=out$covpbb[1,1]

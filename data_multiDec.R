@@ -33,7 +33,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   #          ...
   ######################################################################
   
-  folder="Waveforms/"
+  folder="waveforms/"
   
   # Metadata  
   metadata_filename = paste(folder,"metadata.csv", sep="");
@@ -146,8 +146,8 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   # Time delays between the arrivals at each detector
   if ((verbose==TRUE) & (nDet>1)){
     for (k in 2:nDet){
-      print(sprintf("Time shift between %s and %s is %s ms",detectors[k],
-                    detectors[1],1000*delays[k]))
+      print(sprintf("Time delay between %s and %s is %s ms",detectors[1],
+                    detectors[k],1000*delays[k]))
     }
   }
   return(res)
@@ -243,6 +243,35 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
         leg = c("noise", "(noise+signal) filtered", "signal only")
         col = c("black","red","green")
         legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,3))
+        
+        
+        # spectrum estimated
+        psdest <- pspectrum(Y, Y.frqsamp=fs, ntap.init=NULL, Nyquist.normalize = TRUE, plot=FALSE,verbose=FALSE)
+        psdest_filtered <- pspectrum(YY, YY.frqsamp=fs, ntap.init=NULL, Nyquist.normalize = TRUE, plot=FALSE,verbose=FALSE)
+        
+        # Fourier transform
+        freq2=fs*fftfreq(n_data)          # two-sided frequency vector
+        freq2[1]=0.001                 # to avoid plotting pb in logscale
+        freq1=freq2[1:floor(n_data/2)]        # one-sided frequency vector
+
+        YFT = sqrt(2)*fft(Y)/sqrt(n_data);
+        WFT = sqrt(2)*fft(YY)/sqrt(n_data);
+        ymin=10^(ceiling(log10(min(abs(YFT)[1:floor(n_data/2)])/sqrt(fs))))
+        ymax=10^(ceiling(log10(max(abs(YFT)[1:floor(n_data/2)])/sqrt(fs))))
+        plot (freq1, abs(YFT)[1:floor(n_data/2)]/sqrt(fs), log="xy", type="l", xlab="Frequency", ylab="ASD", 
+              col="grey", xlim=c(1, fs/2), ylim=c(ymin,ymax), pch=1, panel.first = grid())
+        
+        lines(fs*psdest$freq, sqrt(psdest$spec)/sqrt(fs), col="blue", pch=2)
+        
+        lines(freq1, abs(WFT)[1:floor(n_data/2)]/sqrt(fs), col="black", pch=4)        # factor 2 because FT is 2 sided
+        lines(fs*psdest_filtered$freq[1:floor(n_data/2)],                      # pspectrum is 1 sided
+              sqrt(psdest_filtered$spec[1:floor(n_data/2)])/sqrt(fs), col="green", pch=5)
+        
+        lines(freq1, sqrt(2*psd[1:floor(n_data/2)]), col="red", pch=3)         # PSD is 2 sided PSD
+        
+        legend_str=c("col noise FT", "col noise spectrun", "ASD model", "filtered FT", "filtered spectrum")
+        legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))
+        
       
       }else{
         plot (Tf, Yf, type="l", col="black", main=detectors[k])
@@ -295,13 +324,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   freq2[1]=0.001                 # to avoid plotting pb in logscale
   freq1=freq2[1:floor(n/2)]        # one-sided frequency vector
   
-  # Get the 2 sided PSD
-  if (detector == "ALIGO"){
-    psd=aLIGO_PSD_new(freq2, 2)
-  }
-  else{
-    psd=PSD_fromfiles(freq2, 2, detector, actPlot)
-  }
+  psd=PSD_fromfiles(freq2, 2, detector, actPlot)   # 2-sided PSD
   
   if (setseed >0){
     set.seed(setseed)
@@ -314,7 +337,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   Y = Re(Y)/n;                          # noise in time domain
   # Note on the normalisation factor: 
   #  - n comes from the FFT and FFT inverse (sqrt(n) each)
-  #  - to color properly the noise and keep the amplitude right 
+  #  - to color properly the noise and keep the rigth amplitude 
   #    one needs to multiply by sqrt(psd) x sqrt(fs) 
   
   # filter the time series if requested
@@ -363,7 +386,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     
     lines(freq1, sqrt(2*psd[1:floor(n/2)]), col="red", pch=3)         # PSD is 2 sided PSD
     
-    legend_str=c("col noise FT", "col noise spectrun", "ASD model", "filtered FT", "filtered spectrum")
+    legend_str=c("col data FT", "col data spectrun", "ASD model", "filtered FT", "filtered spectrum")
     legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))   
     
     if (verbose==TRUE){
@@ -394,18 +417,19 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   
   cutoff=1e-42            # For 2nd generator detectors
   
-  if (detector=="aLIGO"){
-    psd_filename=sprintf("PSD/%s_sensitivity.txt", toupper(detector))
-    data=read.table(psd_filename);
-    sens=data$V6}   # Design
-  
-  if ((detector=="KAGRA") || (detector=="KAG")){
-    psd_filename=sprintf("PSD/ALIGO_sensitivity.txt", detector)
-    data=read.table(psd_filename);
-    sens=data$V6}   # Design
-  
-  if ((detector=="LHO") || (detector=="LLO") || (detector=="VIR")){
+  if ((detector=="LHO") || (detector=="LLO") || (detector=="LIO") ){
     psd_filename=sprintf("PSD/ALIGO_sensitivity.txt")
+    data=read.table(psd_filename);
+    sens=data$V6}   # Design
+  
+  if (detector=="VIR"){
+    psd_filename=sprintf("PSD/AVIRGO_sensitivity.txt", detector)
+    data=read.table(psd_filename);
+    sens=data$V6}   # Design
+  
+  if (detector=="KAG"){
+    psd_filename=sprintf("PSD/KAGRA_sensitivity.txt", detector)
+    #psd_filename=sprintf("PSD/AVIRGO_sensitivity.txt", detector)
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
@@ -413,11 +437,30 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     psd_filename=sprintf("PSD/ET_D_sensitivity.txt")
     data=read.table(psd_filename);
     sens=data$V4   # HF + LF
-    cutoff=1e-44}   # Design
+    cutoff=1e-44}
+  
+  if (detector=="CEH"){
+    psd_filename="PSD/curves_Jan_2020/ce1.txt"
+    data=read.table(psd_filename);
+    sens=data$V2        
+    cutoff=1e-44}   
+  
+  if (detector=="CEL"){
+    psd_filename="PSD/curves_Jan_2020/ce1.txt"
+    data=read.table(psd_filename);
+    sens=4*data$V2     
+    cutoff=1e-44}   
+  
+  if (detector=="CE2"){
+    psd_filename="PSD/curves_Jan_2020/ce2.txt"
+    data=read.table(psd_filename);
+    sens=data$V2        
+    cutoff=1e-44}  
   
   if (exists("sens")==FALSE){
     stop(sprintf("Detector %s is not implemented in this code. 
-                 You may want to use CE1, CE2, ET_B, ET_C, ET_D, aLIGO, ADV, KAGRA or ALIGO",detector))
+                 You may want to use LHO, LLO, VIR, KAG, LIO, ET1, ET2, ET3,
+                 CEH or CEL",detector))
   }
   
   n=length(f)

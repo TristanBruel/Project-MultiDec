@@ -13,16 +13,8 @@ fits_data = read.table("inputs/A-A_fits_data_g2.dat", sep = ",");# data to gener
 #fits_data = read.table("inputs/fits_data.dat", sep = ",");# data to generate model
 colnames(fits_data) = c("r", "f");
 
-# Linear model
-mod = lm(r~ 0 + f + I(f^3), data = fits_data);# final model
-summary(mod);
-
 # Variable variance linear model
-mu1 = "~ f - 1";
-mu2 = "~ f + I(f^2) - 1";
 mu3 = "~ f + I(f^2) + I(f^3) - 1";
-mu4 = "~ f + I(f^3) - 1";
-s1 = "~ f - 1"; 
 s2 = "~ f + I(f^2) - 1";
 
 Xm  = model.matrix(eval(parse(text=eval(parse(text=mu3)))), fits_data);
@@ -30,11 +22,6 @@ Xs  = model.matrix(eval(parse(text=eval(parse(text=s2)))), fits_data);
 
 fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 
-############################
-### Algorithm parameters ###
-############################
-# g-mode estimate: starting from the left
-gmode = c("left")
 
 #############################
 ### Simulation parameters ###
@@ -43,10 +30,10 @@ gmode = c("left")
 dec=60
 ra=8
 t=1302220800
-skyPosition=c(dec,ra,t)
+skyPosition=c(dec,ra)
 
 detectors=c("LHO","LLO","VIR")
-detectors=c("ET1","ET2")
+detectors=c("ET1","ET2","ET3")
 nDet=length(detectors)
 
 signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
@@ -57,7 +44,7 @@ freq_min=200
 distance_step=3
 
 fs=4096
-filtering_method="prewhiten"
+filtering_method="spectrum"
 
 # loop over N generation of noisy data
 
@@ -89,7 +76,7 @@ for (signal_name in signals){
   
   for (j in 1:dist_nb){
     dist = 1+(j-1)*distance_step
-    #dist=100
+    #dist=3
     for (i in 1:N){
       d = data_multiDec(fs,wvfs,ampl=10/dist,detectors=detectors, 
                       filter=filtering_method, setseed=0,
@@ -97,16 +84,22 @@ for (signal_name in signals){
       
       for (k in 1:nDet){
         psd[,k] = PSD_fromfiles(freq,1,detectors[k]);
-        wData[,k] = d[[k]]$y;   # prewhiten data
+        wData[,k] = d[[k]]$y;   # whitened data
         wData[,k] = wData[,k]/sqrt(mean(psd[,k]));
       }
       
-      likelihoods = timeFreqMap(fs,wData,detectors=detectors,psd,skyPosition,l,offset,transient,
-                              freqBand=c(0,2000),windowType='modifiedHann',
-                              startTime=startTime,logPow=TRUE,
-                              actPlot=FALSE,verbose=FALSE);
-      r = likelihoods$std;
-      ### time window : 0 to 1s ###
+      likelihoods = timeFreqMap(fs,wData,detectors=detectors,psd,skyPosition,t,
+                                l,offset,transient,freqBand=c(0,2000),
+                                windowType='modifiedHann',startTime=startTime,
+                                logPow=TRUE,actPlot=FALSE,verbose=FALSE);
+      
+      if (nDet==1){
+        r = likelihoods$spec
+      }else{
+        r = likelihoods$std
+      }
+      
+      ### time window : 0 to 1.5s ###
       r2 = list();
       r2$t = subset(r$t, r$t<=1.5);
       r2$f = r$f;
@@ -119,7 +112,7 @@ for (signal_name in signals){
       
       out = covpbb_poly(r2, mod=fit, setStart=FALSE, m_L=2, initfreq_L=c(freq_min, 500),
                         true_data=true_data, limFreq=c(1000),
-                        actPlot=FALSE);
+                        actPlot=TRUE);
       
       result[i+(j-1)*N,1]=dist
       result[i+(j-1)*N,2]=out$covpbb[1,1]

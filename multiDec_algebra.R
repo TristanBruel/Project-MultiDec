@@ -1,8 +1,3 @@
-### Earth Model WGS-84 params ###
-
-WGS84 = list(a=6378137, b=6356752.314)
-
-
 ### Wave Propagation Frame to Earth Fixed Frame ###
 
 waveProp_to_Earth = function(psi, theta, phi){
@@ -42,9 +37,13 @@ grav_tensor = function(psi, theta, phi){
 
 location_det = function(l, lambda, h){
   # Inputs : earth model WGS-84 coordinates
+  #           l latitude (rad), lambda longitude (rad), h altitude (m)
   # Output : earth fixed frame coordinates
-  a = WGS84$a
-  b = WGS84$b
+  
+  ### Earth Model WGS-84 params ###
+  a = 6378137
+  b = 6356752.314
+  
   R = a^2/(sqrt(a^2*cos(l)^2+b^2*sin(l)^2)) #local radius of curvature
   x_e = (R+h)*cos(l)*cos(lambda)
   y_e = (R+h)*cos(l)*sin(lambda)
@@ -53,7 +52,9 @@ location_det = function(l, lambda, h){
 }
 
 orientation_arm = function(l, lambda, az, polar){
-  # Inputs : orientation angles of one arm in the detector frame
+  # Inputs : location and orientation angles of one arm in the detector frame
+  #             l latitude (rad), lambda longitude (rad)
+  #             az azimuth of the arm (rad), polar angle wrt local horizontal (rad)
   # Outputs : unit orientation vectors in the earth fixed frame
   o1 = -sin(az)*cos(polar)*sin(lambda)-cos(az)*cos(polar)*cos(lambda)*sin(l)+sin(polar)*cos(l)*cos(lambda)
   o2 = sin(az)*cos(polar)*cos(lambda)-cos(az)*cos(polar)*sin(lambda)*sin(l)+sin(polar)*cos(l)*sin(lambda)
@@ -84,7 +85,7 @@ antenna_patterns = function(dec, ra, t, pol=0, detectors){
   # Output : time of arrival at a given detector
   
   # Detectors parameters  
-  dets = read.csv("detectors_params.csv", sep=",", 
+  dets = read.csv("detectors/detectors_params.csv", sep=",", 
                   stringsAsFactors=FALSE, header=TRUE)
   
   nDet = length(detectors);
@@ -145,7 +146,7 @@ time_delays = function(dec, ra, t, detectors){
   # Outputs : - (algebraic) time taken for the wave to reach the center of the earth
   
   # Detectors parameters  
-  dets = read.csv("detectors_params.csv", sep=",", 
+  dets = read.csv("detectors/detectors_params.csv", sep=",", 
                   stringsAsFactors=FALSE, header=TRUE)
   
   c = 299792458   # light speed
@@ -200,30 +201,6 @@ GPS_to_GMST = function(time){
   return(GMST)
 }
 
-# Function taken from X-Pipeline
-
-GPS_to_GMST2 = function(gps){
-  # Input : time GPS (in s)
-  # Output : time GMST (in s)
-  
-  gps0 = 630763213;   # GPS time of J2000 epoch
-  D = (gps-gps0)/86400;   # days since J2000
-  d_u = floor(D)+1/2;   # days between J2000 and last 0h at Greenwich
-  if (D-d_u<0){
-    d_u = d_u-1
-  }
-  df_u = D-d_u;   # fraction of day
-  # GMST(s) at Greenwich at last 0h
-  T_u = d_u/36525
-  gmst0h = 24110.54841+8640184.812866*T_u+0.093104*T_u^2-6.2e-6*T_u^3;
-  # Current GMST(s)
-  gmst = gmst0h+1.00273790935*86400*df_u;
-  if (gmst>=86400){
-    gmst = gmst-floor(gmst/86400)*86400;
-  }
-  return(gmst)
-}
-
 
 ###################################
 ### Dominant Polarization Frame ###
@@ -238,7 +215,7 @@ convertToDPF = function(Fp,Fc){
   FcDP=-sin(2*psi)*Fp+cos(2*psi)*Fc;
   
   if (sum(FpDP^2)<sum(FcDP^2)){
-    return(cbind(FcDP,FpDP))
+    return(cbind(FcDP,-FpDP))
   }
   else {
     return(cbind(FpDP,FcDP))

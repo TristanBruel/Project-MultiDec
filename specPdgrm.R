@@ -175,7 +175,7 @@ specPdgrm = function(data, time = NULL, l, p, fs = NULL, actPlot = TRUE,
   i <- 1:dim(R)[2];
   #i <- 1:(length(R)-1); # Rput form psplinePsd
   
-  x <- round(l / fs * (i-1) * pc * 1000, 2); # number of intervals
+  x <- round(l / fs * (i-1) * 1000 * pc, 2); # real time indices (in ms)
   
   if(!is.null(time)){
     
@@ -225,6 +225,6 @@ specPdgrm = function(data, time = NULL, l, p, fs = NULL, actPlot = TRUE,
     image.plot(x, y, z, xlab = "Time [s]", ylab = "Frequency [Hz]", main = paste(main)); # yaxt='n'
   }
   
-  return(list(x = x, y = y, z = z));
+  return(list(t = x, f = y, E = z));
   
 }

@@ -8,8 +8,8 @@ library(signal)
 
 
 ########################################################################
-timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
-                       skyPosition,integLength,offsetLength,transientLength,
+timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
+                       skyPosition,t,integLength,offsetLength,transientLength,
                        freqBand=c(0,Inf),windowType="hann",startTime=0,
                        verbose=FALSE, actPlot=FALSE,logPow=TRUE){
   ######################################################################
@@ -20,7 +20,8 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   #           psd: power spectral densities, one column per detector
   #                 Must be sampled at frequencies fs*[0:1/2, by=1/integLength]
   #                 one column per detector
-  #           skyPosition: vector (dec, ra, t)
+  #           skyPosition: vector (dec, ra)
+  #           t: time of arrival of the GW wave
   #           integLength: size of the data used for each Fourier transform
   #                 Must be a power of 2
   #           offsetLength: number of samples between consecutive FT segments
@@ -76,7 +77,6 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   ### Detectors information ###
   dec=skyPosition[1];
   ra=skyPosition[2];
-  t=skyPosition[3];
   F=antenna_patterns(dec,ra,t,0,detectors);
   if (verbose){
     print("Antenna response matrix : F")
@@ -157,6 +157,11 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
     }
   }
   
+  if (nDet == 1){
+    spec=list(t=timeIndices,f=inbandFreq,E=t(detSpec[,,1]))
+    return(list(spec=spec))
+  }
+  
   ### Compute detector responses ###
   # Noise-weighted responses (one column per detector)
   wFp=repmat(F[,1],nFreqBins,1)/sqrt(psd);
@@ -165,14 +170,10 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLo","VIR"),psd,
   # Convert to Dominant Polarization Frame
   wFpDP=zeros(nFreqBins,nDet);
   wFcDP=zeros(nFreqBins,nDet);
-  nwFpDP=zeros(nFreqBins,nDet);
-  nwFcDP=zeros(nFreqBins,nDet);
   for (l in 1:nFreqBins){
     DPF=convertToDPF(wFp[l,],wFc[l,]);
     wFpDP[l,]=DPF[,1];
     wFcDP[l,]=DPF[,2];
-    nwFpDP[l,]=DPF[,1]/sum(DPF[,1]^2);
-    nwFcDP[l,]=DPF[,2]/sum(DPF[,2]^2);
   }
   
   ### Residual delays ###
