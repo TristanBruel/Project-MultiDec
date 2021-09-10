@@ -28,39 +28,36 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 dec=-28.94
 ra=17.75
 
-t=1302220800
+t0=1302220800
 
 dist=8 # distance to the galactic center (in kpc)
 
 signal_name = c("s20.0--LS220")
 
-detectors=c("LHO","LLO","VIR","KAG")
+detectors=c("LHO","LLO","VIR","LIO")
 #detectors=c("ET1","ET2","ET3")
 nDet=length(detectors)
 
 fs=4096
-filtering_method="prewhiten"
+filtering_method="spectrum"
 
 # loop over N generation of noisy data
 
 N=100L
-N=1L
-time_nb=96L
-time_nb=1L
-result<-array(0,c(nrow=N*time_nb,ncol=7))
+#N=1L
+time_nb=48L
+#time_nb=1L
+result<-array(0,c(nrow=N*time_nb,ncol=6))
 
 
-for (dt in 1:time_nb){ # measurements over 3 days, 1 per half an hour
+for (dt in 1:time_nb){ # measurements over 1 day, 1 per half an hour
   
-  t2 = t+(dt-1)*30*60 # GPS time in seconds
-  t2 = t+5*3600
-  skyPosition = c(dec,ra,t2)
+  t = t0+(dt-1)*30*60 # GPS time in seconds
+  #t2 = t+27*3600
+  skyPosition = c(dec,ra)
   
-  wvfs = signal_multiDec(dec,ra,t2,fs,signal=signal_name,detectors=detectors,
+  wvfs = signal_multiDec(dec,ra,t,fs,signal=signal_name,detectors=detectors,
                          pbOff=TRUE,actPlot=FALSE,verbose=TRUE)
-  
-  patterns = antenna_patterns(dec,ra,t2,0,detectors);
-  Feq = sqrt(sum(patterns[,1]^2)/nDet);
   
   true_data = wvfs$true_data
   startTime = 0.1   # signal starts 100ms after bounce (t=0)
@@ -85,15 +82,15 @@ for (dt in 1:time_nb){ # measurements over 3 days, 1 per half an hour
                       actPlot=FALSE, verbose=FALSE);
     
     for (k in 1:nDet){
-      psd[,k] = PSD_fromfiles(freq,1,detectors[k]);
+      psd[,k] = PSD_fromfiles(freq,1,detectors[k],actPlot=FALSE);
       wData[,k] = d[[k]]$y;   # prewhiten data
       wData[,k] = wData[,k]/sqrt(mean(psd[,k]));
     }
     
-    likelihoods = timeFreqMap(fs,wData,detectors=detectors,psd,skyPosition,l,offset,transient,
-                              freqBand=c(0,2000),windowType='modifiedHann',
-                              startTime=startTime,logPow=TRUE,
-                              actPlot=FALSE,verbose=FALSE);
+    likelihoods = timeFreqMap(fs,wData,detectors=detectors,psd,skyPosition,t,
+                              l,offset,transient,freqBand=c(0,2000),
+                              windowType='modifiedHann',startTime=startTime,
+                              logPow=TRUE,actPlot=FALSE,verbose=FALSE);
     r = likelihoods$std;
     ### time window : 0 to 1s ###
     r2 = list();
@@ -108,7 +105,7 @@ for (dt in 1:time_nb){ # measurements over 3 days, 1 per half an hour
     
     out = covpbb_poly(r2, mod=fit, setStart=FALSE, m_L=2, initfreq_L=c(freq_min, 500),
                       true_data=true_data, limFreq=c(1000),
-                      actPlot=TRUE);
+                      actPlot=FALSE);
     
     result[i+(dt-1)*N,1]=0.5*(dt-1)
     result[i+(dt-1)*N,2]=out$covpbb[1,1]
@@ -116,7 +113,6 @@ for (dt in 1:time_nb){ # measurements over 3 days, 1 per half an hour
     result[i+(dt-1)*N,4]=out$residual[1,1]
     result[i+(dt-1)*N,5]=out$residual[1,2]
     result[i+(dt-1)*N,6]=out$residual[1,3]
-    result[i+(dt-1)*N,7]=Feq
   }
   
   ind1=1+(dt-1)*N
@@ -125,6 +121,6 @@ for (dt in 1:time_nb){ # measurements over 3 days, 1 per half an hour
                 signal_name, dist, 0.5*(dt-1), mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])))
 }
   
-filename=sprintf("results/galaCenter/results_AA_%s_f2_%s_multiDecHLVK.txt", 
+filename=sprintf("results/galaCenter/polarized/results_AA_%s_f2_%s_multiDecHLVI.txt", 
                  filtering_method, signal_name)
 #write.table(result, file=filename, sep=" ", row.names=FALSE, col.names=FALSE)
