@@ -1,3 +1,5 @@
+library(geometry)
+
 ### Wave Propagation Frame to Earth Fixed Frame ###
 
 waveProp_to_Earth = function(psi, theta, phi){
@@ -77,9 +79,9 @@ earthFrame_to_detector = function(l, lambda, h, az1, az2, polar1, polar2){
 
 antenna_patterns = function(dec, ra, t, pol=0, detectors){
   # Inputs : - sky position of the source
-  #               declination in Â° and right ascension in hours
+  #               declination in ° and right ascension in hours
   #          - time GPS of arrival at the detector
-  #          - polarization angle (null by default)
+  #          - polarization angle in radians (null by default)
   #          - list of detectors ('LHO', 'LLO', 'VIR' or 'KAG')
   #
   # Output : time of arrival at a given detector

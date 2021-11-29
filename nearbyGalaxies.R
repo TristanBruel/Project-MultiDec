@@ -2,6 +2,7 @@ source("data_multiDec.R")
 source("functions.R")
 source("timeFreqMaps.R")
 
+
 #########################
 ### Statistical model ###
 #########################
@@ -21,34 +22,32 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 #############################
 ### Simulation parameters ###
 #############################
-# Sky position : Galactic center (SIMBAD catalog http://simbad.u-strasbg.fr/simbad/sim-id?Ident=Galactic+Centre)
-dec=-29.01
-ra=17.76
-skyPosition = c(dec,ra)
-dist=8.2 # distance to the galactic center (in kpc)
+# Nearby Galaxies
+galaxies_filename = "nearbyGalaxies/nearby_galaxies.csv"
+galaxies = read.csv(galaxies_filename, stringsAsFactors=FALSE);
 
-# Time of arrival at the center of Earth
-t0=1302220800
+galaxy_names = galaxies$name;
+skyPositions = cbind(galaxies$RA,galaxies$DEC)
+distances = galaxies$distance
+
+# Waveform
+signal_name = c("s20.0--LS220")
 
 # List of networks
-networks=list(c("LHO","LLO"),c("LHO","LLO","VIR"),c("LHO","LLO","VIR","KAG"),
-              c("LHO","LLO","VIR","KAG","LAO"),c("LHO","LLO","VIR","LAO"))
-network_names=c("HL","HLV","HLVK","HLVKA","HLVA")
+networks=list(c("CEH","CEL"),c("ET1","ET2","ET3"),c("CEH","CEL","ET1","ET2","ET3"))
+network_names=c("CEH+CEL","ET","CEH+CEL+ET")
 
-# List of waveforms
-signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220")
+fs = 4096
+filtering_method = "spectrum"
 
-fs=4096
-#filtering_method="prewhiten"
-filtering_method="spectrum"
+t0 = 1302220800
 
 # loop over N generation of noisy data
-N=100L
+N = 100L
 
-# number and size of time steps: event each 30min over 24 hours
-time_nb=49L
-time_step=0.5
+# number and size of time steps: event each hour over 24 hours
+time_nb=25L
+time_step=1
 
 ind_net=0
 for (detectors in networks){
@@ -56,8 +55,15 @@ for (detectors in networks){
   print(paste("Network of detectors: ",str_c(detectors,collapse=', ')))
   nDet=length(detectors)
   
-  for (signal_name in signals){
-    result<-array(0,c(nrow=N*time_nb,ncol=6))
+  ind_gal = 0
+  for (gal in galaxy_names){
+    result <- array(0,c(nrow=N*time_nb,ncol=6))
+    ind_gal = ind_gal+1
+    skyAngles = skyPositions[ind_gal,]
+    dist = distances[ind_gal]
+    dec = skyAngles[1]
+    ra = skyAngles[2]
+    skyPosition = c(dec,ra)
     
     for (dt in 1:time_nb){
       
@@ -88,7 +94,7 @@ for (detectors in networks){
                           actPlot=FALSE, verbose=FALSE);
         
         for (k in 1:nDet){
-          psd[,k] = PSD_fromfiles(freq,1,detectors[k],actPlot=FALSE);
+          psd[,k] = PSD_fromfiles(freq,1,detectors[k]);
           wData[,k] = d[[k]]$y;   # whitened data
           wData[,k] = wData[,k]/sqrt(mean(psd[,k]));
         }
@@ -98,7 +104,7 @@ for (detectors in networks){
                                   integLength=l,offsetLength=offset,transientLength=transient,
                                   freqLim=c(0,2000),windowType='modifiedHann',startTime=startTime,
                                   logPow=TRUE,actPlot=FALSE,verbose=FALSE);
-        r = likelihoods$std;
+        r = likelihoods$std
         
         ### Reduced time window ###
         r2 = list();
@@ -119,12 +125,12 @@ for (detectors in networks){
       
       ind1=1+(dt-1)*N
       ind2=N+(dt-1)*N
-      print(sprintf("signal %s @ time: +%s hours. Covpbb mean:%f. Covpbb median: %f",
-                    signal_name, time_step*(dt-1), mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])))
+      print(sprintf("galaxy %s @ distance: %f kpc @ time: +%s hours. Covpbb mean:%f. Covpbb median: %f",
+                    gal, dist, time_step*(dt-1), mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])))
     }
-      
-    filename=sprintf("galaxyCenter/%s/results_AA_%s_f2_%s_multiDec.txt", 
-                     network_names[ind_net],filtering_method, signal_name)
+    
+    filename=sprintf("nearbyGalaxies/new/%s/results_AA_%s_f2_%s_%s.txt", 
+                     network_names[ind_net], filtering_method, signal_name, gal)
     write.table(result, file=filename, sep=" ", row.names=FALSE, col.names=FALSE)
   }
 }

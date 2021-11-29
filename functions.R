@@ -304,7 +304,7 @@ findGmodes_poly = function(r, N = 3,
       points(x0, y0, col = "green", pch = 19); # blue point in the plot
     }
   }
-  
+  # no constraint on starting point
   else{
     model = lm(maxf~ stats::poly(r$t,N));
     maxf_fit = model$fitted.values;
@@ -344,7 +344,7 @@ findGmodes_poly = function(r, N = 3,
 
 
 ########################################################################
-findGmodes_LASSO = function(r, lambda =1, 
+findGmodes_LASSO = function(r, lambda = 1, 
                             setStart = FALSE, m_L = 2, initfreq_L = c(0, Inf),
                             actPlot = FALSE){
   ########################################################################
@@ -362,7 +362,9 @@ findGmodes_LASSO = function(r, lambda =1,
   x = x[maxf>0];
   maxf = maxf[maxf>0];
   
-  if (length(maxf)==0){return(c(0))} # in case all maxima are equal to zero
+  if (length(maxf)==0){ # in case all maxima are equal to zero
+    return(rep(0,length(r$t)))
+  }
   
   if (setStart){
     # limiting frequencies according to initfreq in y
@@ -432,11 +434,12 @@ findGmodes_LASSO = function(r, lambda =1,
       points(x0, y0, col = "green", pch = 19); # blue point in the plot
     }
   }
-  
+  # no constraint on starting point
   else{
+    
     # special case in which all the maxima are the same
     if (length(count(maxf)$freq)==1){
-      return(maxf)
+      return(rep(maxf[1],length(r$t)))
     }
     # normal case
     Xmat <- cbind(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10);
@@ -455,9 +458,14 @@ findGmodes_LASSO = function(r, lambda =1,
     maxf2 = maxf[indices];
     t2 = x[indices];
     
+    # special case in which the fit is too far from the maxima
+    if (length(maxf2)==0){
+      return(rep(0,length(r$t)))
+    }
+    
     # special case in which all the maxima are the same
-    if (length(count(maxf2)$freq)==1){
-      return(maxf2)
+    if (length(count(maxf2)$freq)==1){ 
+      return(rep(maxf2[1],length(r$t)))
     }
     
     Xmat2 <- cbind(t2, t2^2, t2^3, t2^4, t2^5, t2^6, 
@@ -489,6 +497,115 @@ findGmodes_LASSO = function(r, lambda =1,
   
   return(maxf_fit);
 }
+
+
+
+########################################################################
+findGmodes_LASSO2 = function(r, lambda = 1, 
+                             setStart = FALSE, m_L = 2, initfreq_L = c(0, Inf),
+                             actPlot = FALSE){
+  ########################################################################
+  
+  # data must not contain zeros, so 'r' must not contain NA values
+  # finding g-modes
+  
+  # r : output from specPdgrm
+  # lambda : penalization parameter
+  
+  x = r$t; y = r$f; z = r$E; # values from spectrogram
+  
+  maxf = y[apply(z, 1, which.max)]; # maximum frequency at each time index
+  
+  x = x[maxf>0];
+  maxf = maxf[maxf>0];
+  
+  if (length(maxf)==0){ # in case all maxima are equal to zero
+    warning("Dominant frequency identically null")
+    return(c(0))
+  } 
+  
+  # special case in which all the maxima are the same
+  if (length(count(maxf)$freq)==1){
+    warning(sprintf("Constant dominant frequency: %s"),maxf[1])
+    return(maxf)
+  }
+  
+  # normal case
+  Xmat <- cbind(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10);
+  lasso_model = glmnet(Xmat, maxf, alpha=1, lambda=lambda);
+  maxf_fit = predict(lasso_model, Xmat);
+  
+  maxs = which(maxf==max(maxf))
+  tf_mode1 = maxs[length(maxs)]
+  
+  t1 = x[1:tf_mode1];
+  maxf1 = maxf[1:tf_mode1];
+  
+  if(tf_mode1<length(x)){
+    t2 = x[(tf_mode1+1):length(x)];
+    maxf2 = maxf[(tf_mode1+1):length(x)];
+  }
+  
+  if(actPlot){
+    image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]")
+    points(x, maxf_fit, col='black',type="p")
+    points(t1, maxf1, col='blue',type="p")
+    if(tf_mode1<length(x)){
+      points(t2, maxf2, col='red',type="p")
+    }
+  }
+  
+  
+  # second iteration
+  
+  # special case in which all the maxima are the same
+  if (length(count(maxf1)$freq)==1){
+    maxf_fit1 = maxf1;
+  }else{
+    Xmat1 <- cbind(t1, t1^2, t1^3, t1^4, t1^5, t1^6, 
+                   t1^7, t1^8, t1^9, t1^10);
+    
+    lasso_model = glmnet(Xmat1, maxf1, alpha=1, lambda=lambda);
+    lasso_coef <- coef(lasso_model);
+    
+    maxf_fit1 = 0;
+    for (k in 1:length(lasso_coef)){
+      maxf_fit1 = maxf_fit1+lasso_coef[k]*r$t^(k-1)
+    }
+  }
+  
+  if(tf_mode1<length(x)){
+    
+    # special case in which all the maxima are the same
+    if (length(count(maxf2)$freq)==1){
+      maxf_fit2=maxf2;
+    }else{
+      Xmat2 <- cbind(t2, t2^2, t2^3, t2^4, t2^5, t2^6, 
+                     t2^7, t2^8, t2^9, t2^10);
+      
+      lasso_model = glmnet(Xmat2, maxf2, alpha=1, lambda=lambda);
+      maxf_fit2 = predict(lasso_model, Xmat2);
+    }
+  }
+  
+  if(actPlot){
+    image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]")
+    points(t1, maxf1, col='blue',pch=1)
+    points(r$t, maxf_fit1, col='black',pch=1)
+    
+    if(tf_mode1<length(x)){
+      points(t2, maxf2, col='red',type="p")
+      points(t2, maxf_fit2, col='green',pch=1)
+    }
+    
+    leg <- c("Maxima", "Estimation ")#,"Uncertainty");
+    col <- c("blue","black")#,"gray");
+    legend("topleft",legend=leg,cex=.8,col=col,pch=c(1,1));
+  }
+  
+  return(maxf_fit1);
+}
+
 
 
 
@@ -970,7 +1087,7 @@ covpbb_poly = function(r, N=3, mod, setStart = FALSE, m_L = 8, initfreq_L = c(-I
   maxfs = findGmodes_LASSO(r, lambda=1, setStart=setStart, m_L=m_L, initfreq_L=initfreq_L, 
                           actPlot=FALSE);
   
-  if(actPlot == TRUE){
+  if(actPlot){
     image.plot(r$t,r$f,r$E,xlab="Time [s]",ylab="Frequency [Hz]")
     points(timefreq, maxfs, col='black',type="p")
   }

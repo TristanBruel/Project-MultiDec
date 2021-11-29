@@ -10,8 +10,8 @@ library(signal)
 ########################################################################
 timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
                        skyPosition,t,integLength,offsetLength,transientLength,
-                       freqBand=c(0,Inf),windowType="hann",startTime=0,
-                       verbose=FALSE, actPlot=FALSE,logPow=TRUE){
+                       freqLim=c(0,Inf),windowType="modifiedHann",startTime=0,
+                       logPow=TRUE,verbose=FALSE,actPlot=FALSE){
   ######################################################################
   # Inputs :  fs: sampling frequency
   #           wData: matrix of time-domain whitened data
@@ -21,16 +21,13 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   #                 Must be sampled at frequencies fs*[0:1/2, by=1/integLength]
   #                 one column per detector
   #           skyPosition: vector (dec, ra)
-  #           t: time of arrival of the GW wave
+  #           t: time of arrival of the GW wave at the center of Earth
   #           integLength: size of the data used for each Fourier transform
-  #                 Must be a power of 2
   #           offsetLength: number of samples between consecutive FT segments
-  #                 Must be a power of 2
   #           transientLength: number of samples to ignore (beginning and end)
-  #           freqBand: band of frequencies to include in the maps
+  #           freqLim: band of frequencies to include in the maps
   #           windowType: window type to be used in FFTs ('hann', 'bartlett' or 'modifiedHann')
-  #           startTime: (optional) time of detection in the first detector (in s)
-  #           threshold: percentage of TF maps pixels to discard in thresholding
+  #           startTime: (optional) set time of detection in the first detector (in s)
   #
   # Output :  maps of plus energy, cross energy, 
   #           standard and soft constraint likelihood
@@ -48,7 +45,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   
   # Vector of one-sided frequencies
   freq1=fs/2*seq(0,1,length=integLength/2+1);
-  freqInd=which((freq1>=freqBand[1]) & (freq1<=freqBand[2]));
+  freqInd=which((freq1>=freqLim[1]) & (freq1<=freqLim[2]));
   inbandFreq=freq1[freqInd];
   nFreqBins=length(inbandFreq);
   psd=psd[freqInd,];
@@ -170,6 +167,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   # Convert to Dominant Polarization Frame
   wFpDP=zeros(nFreqBins,nDet);
   wFcDP=zeros(nFreqBins,nDet);
+  
   for (l in 1:nFreqBins){
     DPF=convertToDPF(wFp[l,],wFc[l,]);
     wFpDP[l,]=DPF[,1];
@@ -233,7 +231,7 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
 
   # Cross energy
   crossLikelihood=(1/Mcc)*(Re(wFcTFMap)^2+Im(wFcTFMap)^2);
-  
+
   # Standard likelihood
   stdLikelihood=plusLikelihood+crossLikelihood;
   
@@ -252,13 +250,13 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   ### Plot Maps ###
   if (actPlot){
     image.plot(timeIndices,inbandFreq,t(plusLikelihood),
-               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Plus energy")
-    image.plot(timeIndices,inbandFreq,t(crossLikelihood),
-               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Cross energy")
-    image.plot(timeIndices,inbandFreq,t(stdLikelihood),
-               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Standard likelihood")
-    image.plot(timeIndices,inbandFreq,t(softLikelihood),
-               xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
+            xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Plus energy")
+      image.plot(timeIndices,inbandFreq,t(crossLikelihood),
+              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Cross energy")
+      image.plot(timeIndices,inbandFreq,t(stdLikelihood),
+              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Standard likelihood")
+      image.plot(timeIndices,inbandFreq,t(softLikelihood),
+              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
   }
   rplus=list(t=timeIndices,f=inbandFreq,E=t(plusLikelihood))
   rcross=list(t=timeIndices,f=inbandFreq,E=t(crossLikelihood))

@@ -1,5 +1,6 @@
 library ("stats")
 library ("signal")
+library("stringr")
 library ("seewave")
 library ("psd")
 library ("pracma")
@@ -14,12 +15,12 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
+signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
                            signal="KURODA", detectors=c("LHO","LLO","VIR"), 
                            pbOff=TRUE, verbose=FALSE, actPlot=FALSE){
   ######################################################################
   # Inputs:  sky position of the source
-  #               declination in Â°, right ascension in hours
+  #               declination in °, right ascension in hours
   #          time GPS at which the wave arrives at the center of the Earth
   #          sampling frequency of the output time series
   #          name of the simulated waveform
@@ -107,7 +108,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
   nDet=length(detectors);
   res=list();
   # antenna responses and time delay for each detector
-  F=antenna_patterns(dec,ra,t,0,detectors);
+  F=antenna_patterns(dec,ra,t,pol,detectors);
   if (verbose){
     print("Antenna response matrix : F")
     print(F)
@@ -131,7 +132,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, fs=4096,
            main=paste(signal,"in",detectors[k]),panel.first = grid(),
            xlim=c(min(sXX$time,time),max(sXX$time,time)))
       lines(time,hoft,col='red')
-      leg=(c(paste("wvf @",fs_orig),paste("resampled wvf @",fs)))
+      leg=(c(paste("wvf @",fs_orig),paste("resampled hoft @",fs)))
       col=c("black","red")
       legend ("topleft", legend=leg,col=col,pch=c(1,2))
     }
@@ -417,7 +418,7 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   
   cutoff=1e-42            # For 2nd generator detectors
   
-  if ((detector=="LHO") || (detector=="LLO") || (detector=="LIO") ){
+  if ((detector=="LHO") || (detector=="LLO") || (detector=="LAO") ){
     psd_filename=sprintf("PSD/ALIGO_sensitivity.txt")
     data=read.table(psd_filename);
     sens=data$V6}   # Design
@@ -451,15 +452,21 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     sens=4*data$V2     
     cutoff=1e-44}   
   
-  if (detector=="CE2"){
+  if (detector=="CEH2"){
     psd_filename="PSD/curves_Jan_2020/ce2.txt"
     data=read.table(psd_filename);
     sens=data$V2        
     cutoff=1e-44}  
   
+  if (detector=="CEL2"){
+    psd_filename="PSD/curves_Jan_2020/ce2.txt"
+    data=read.table(psd_filename);
+    sens=4*data$V2        
+    cutoff=1e-44}
+  
   if (exists("sens")==FALSE){
     stop(sprintf("Detector %s is not implemented in this code. 
-                 You may want to use LHO, LLO, VIR, KAG, LIO, ET1, ET2, ET3,
+                 You may want to use LHO, LLO, VIR, KAG, LAO, ET1, ET2, ET3,
                  CEH or CEL",detector))
   }
   
