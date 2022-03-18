@@ -2,12 +2,14 @@ source("data_multiDec.R")
 source("functions.R")
 source("timeFreqMaps.R")
 
+source("true_gmode.R")
+
 library(signal)
 
 #########################
 ### Statistical model ###
 #########################
-fits_data = read.table("inputs/A-A_fits_data_g2.dat", sep = ",");# data to generate model
+fits_data = read.table("inputs/1D_simulations/A-A_fits_data_g2.dat", sep = ",");# data to generate model
 colnames(fits_data) = c("r", "f");
 
 # Variable variance linear model
@@ -23,25 +25,26 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 #############################
 ### Simulation parameters ###
 #############################
-# Sky position
-dec=60
-ra=8
+# Sky position: direction inside the Sagittarius constellation
+dec=-16.18
+ra=18.34
 skyPosition=c(dec,ra)
-# Time of arrival at the center of the Earth
-t0=1302220800
+# Time of arrival at the center of Earth
+t0=1325048418
 # Distance of the source
-dist=10
+dist=0.1
 
 detectors=c("LHO","LLO","VIR","KAG","LAO")
 nDet=length(detectors)
 
-signal_name="s25.0--LS220"
+signal_name="s20.0--LS220"
+signal_name="s15--3D_pole"
 
 fs=4096
 filtering_method="spectrum"
   
 wvfs = signal_multiDec(dec=dec,ra=ra,t=t0,fs=fs,signal=signal_name,detectors=detectors,
-                       pbOff=TRUE,actPlot=FALSE,verbose=TRUE)
+                       pbOff=TRUE,actPlot=TRUE,verbose=TRUE)
 true_data = wvfs$true_data
 startTime = 0.1   # signal starts 100ms after bounce (t=0)
 L = length(wvfs$time)   # number of samples
@@ -82,8 +85,10 @@ r2$t = subset(r$t, r$t<=1.5);
 r2$f = r$f;
 r2$E = r$E[1:length(r2$t),]
 
-out = covpbb_poly(r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                  actPlot=TRUE);
+out = covpbb_LASSO(r2, mod=fit, setStart=FALSE, m_L=5, initfreq_L=c(0, 300),
+                   true_data=true_data, limFreq=c(1000),
+                   actPlot=TRUE);
+
+test = true_gmode(r2, true_data, actPlot=TRUE)
   
-print(sprintf("signal %s @ distance: %f kpc. Covpbb: %f",
-                signal_name, dist, out$covpbb[1,1]))
+print(sprintf("signal %s @ distance: %f kpc. Covpbb: %f", signal_name, dist, out$covpbb[1,1]))

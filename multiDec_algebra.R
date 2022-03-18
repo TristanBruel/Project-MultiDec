@@ -79,7 +79,7 @@ earthFrame_to_detector = function(l, lambda, h, az1, az2, polar1, polar2){
 
 antenna_patterns = function(dec, ra, t, pol=0, detectors){
   # Inputs : - sky position of the source
-  #               declination in ° and right ascension in hours
+  #               declination in ? and right ascension in hours
   #          - time GPS of arrival at the detector
   #          - polarization angle in radians (null by default)
   #          - list of detectors ('LHO', 'LLO', 'VIR' or 'KAG')
@@ -87,7 +87,7 @@ antenna_patterns = function(dec, ra, t, pol=0, detectors){
   # Output : time of arrival at a given detector
   
   # Detectors parameters  
-  dets = read.csv("detectors/detectors_params.csv", sep=",", 
+  dets = read.csv("inputs/detectors/detectors_params.csv", sep=",", 
                   stringsAsFactors=FALSE, header=TRUE)
   
   nDet = length(detectors);
@@ -148,7 +148,7 @@ time_delays = function(dec, ra, t, detectors){
   # Outputs : - (algebraic) time taken for the wave to reach the center of the earth
   
   # Detectors parameters  
-  dets = read.csv("detectors/detectors_params.csv", sep=",", 
+  dets = read.csv("inputs/detectors/detectors_params.csv", sep=",", 
                   stringsAsFactors=FALSE, header=TRUE)
   
   c = 299792458   # light speed

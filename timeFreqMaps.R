@@ -250,13 +250,17 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   ### Plot Maps ###
   if (actPlot){
     image.plot(timeIndices,inbandFreq,t(plusLikelihood),
-            xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Plus energy")
+            xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Plus energy",
+            cex.lab=1.8, cex.axis=1.5)
       image.plot(timeIndices,inbandFreq,t(crossLikelihood),
-              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Cross energy")
-      image.plot(timeIndices,inbandFreq,t(stdLikelihood),
-              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Standard likelihood")
+              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Cross energy",
+              cex.lab=1.8, cex.axis=1.5)
+      image.plot(timeIndices,inbandFreq,t(stdLikelihood), 
+              xlab = "Time [s]", ylab = "Frequency [Hz]",
+              cex.lab=1.8, cex.axis=1.5)
       image.plot(timeIndices,inbandFreq,t(softLikelihood),
-              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood")
+              xlab = "Time [s]", ylab = "Frequency [Hz]", main = "Soft constraint likelihood",
+              cex.lab=1.8, cex.axis=1.5)
   }
   rplus=list(t=timeIndices,f=inbandFreq,E=t(plusLikelihood))
   rcross=list(t=timeIndices,f=inbandFreq,E=t(crossLikelihood))

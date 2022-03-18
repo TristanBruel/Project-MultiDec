@@ -3,8 +3,8 @@ source("multiDec_algebra.R")
 library(Matrix)
 library(fields)
 
-#detectors = c("LHO", "LLO", "VIR", "KAG", "LIO", "ET1", "ET2", "ET3");
 detectors = c("LHO", "LLO", "VIR", "KAG", "LIO");
+detectors = c("ET1", "ET2", "ET3")
 
 t = 1302220800  # GPS time 12/04/2021 00:00:00
 
@@ -19,12 +19,12 @@ for (k in detectors){
     for (dec in 1:n){
       F=antenna_patterns(-90+(dec-1)*180/n, (ra-1)*24/(2*n), t, pol=0, k);
       #res[ra,dec] = sqrt(F[1]^2 + F[2]^2);
-      res[ra,dec] = F[1];
+      res[ra,dec] = F[2];
     }
   }
-  filename = sprintf("Plots/skyMaps/Fp_%s.png",k)
+  filename = sprintf("Plots/skyMaps/Fc_%s.png",k)
   png(filename)
-  image.plot(list_ra, list_dec, res, main=paste("Fplus ",k),
+  image.plot(list_ra, list_dec, res, main=paste("Fcross ",k),
              xlab="Right ascension [h]", xaxp=c(0,24,6),
              ylab="Declination [°]", yaxp=c(-90,90,6))
   dev.off()

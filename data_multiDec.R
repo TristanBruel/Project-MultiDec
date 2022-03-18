@@ -16,11 +16,11 @@ source("multiDec_algebra.R")
 
 ########################################################################
 signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
-                           signal="KURODA", detectors=c("LHO","LLO","VIR"), 
+                           signal="s20.0--LS220", detectors=c("LHO","LLO","VIR"), 
                            pbOff=TRUE, verbose=FALSE, actPlot=FALSE){
   ######################################################################
   # Inputs:  sky position of the source
-  #               declination in °, right ascension in hours
+  #               declination in ?, right ascension in hours
   #          time GPS at which the wave arrives at the center of the Earth
   #          sampling frequency of the output time series
   #          name of the simulated waveform
@@ -34,14 +34,14 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
   #          ...
   ######################################################################
   
-  folder="waveforms/"
+  folder="inputs/2D_simulations/"
   
   # Metadata  
-  metadata_filename = paste(folder,"metadata.csv", sep="");
+  metadata_filename = paste(folder,"waveforms/metadata.csv", sep="");
   meda = read.csv(metadata_filename, stringsAsFactors=FALSE);
   colnames(meda) = c("name","wvf_name","truedata_name", "tb");
   index=which(meda$name == signal);
-  gw_filename=paste(folder,meda$wvf_name[index],sep="");
+  gw_filename=paste(folder,'waveforms/',meda$wvf_name[index],sep="");
   sXX = read.table(gw_filename);
   colnames(sXX) = c ("time","hplus","hcross");
   
@@ -51,7 +51,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
   
   # True data to define the ratio Mpns / Rpns^2 (for g-mode)
   if ((signal != "KURODA") & (signal != "sinus")){
-    truedata_filename=paste(folder,"Ratios/",meda$truedata_name[index],sep="")
+    truedata_filename=paste(folder,"ratios/",meda$truedata_name[index],sep="")
     true_data = read.table(truedata_filename,sep = ",",comment.char = "#",header=TRUE);
     if (signal != "s20.0--SFHo"){
       true_data = cbind(true_data$time, true_data$mass_pns / true_data$r_pns^2);
@@ -418,48 +418,44 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   
   cutoff=1e-42            # For 2nd generator detectors
   
+  psd_dir="inputs/PSD/"
+  
   if ((detector=="LHO") || (detector=="LLO") || (detector=="LAO") ){
-    psd_filename=sprintf("PSD/ALIGO_sensitivity.txt")
+    psd_filename=paste(psd_dir,"ALIGO_sensitivity.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
   if (detector=="VIR"){
-    psd_filename=sprintf("PSD/AVIRGO_sensitivity.txt", detector)
+    psd_filename=paste(psd_dir,"AVIRGO_sensitivity.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
   if (detector=="KAG"){
-    psd_filename=sprintf("PSD/KAGRA_sensitivity.txt", detector)
-    #psd_filename=sprintf("PSD/AVIRGO_sensitivity.txt", detector)
+    psd_filename=paste(psd_dir,"KAGRA_sensitivity.txt",sep='')
+    #psd_filename=paste(psd_dir,"AVIRGO_sensitivity.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
   if ((detector=="ET1") || (detector=="ET2") || (detector=="ET3")){
-    psd_filename=sprintf("PSD/ET_D_sensitivity.txt")
+    psd_filename=paste(psd_dir,"ET_D_sensitivity.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V4   # HF + LF
     cutoff=1e-44}
   
   if (detector=="CEH"){
-    psd_filename="PSD/curves_Jan_2020/ce1.txt"
+    psd_filename=paste(psd_dir,"curves_Jan_2020/ce1.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V2        
     cutoff=1e-44}   
   
   if (detector=="CEL"){
-    psd_filename="PSD/curves_Jan_2020/ce1.txt"
+    psd_filename=paste(psd_dir,"curves_Jan_2020/ce1.txt",sep='')
     data=read.table(psd_filename);
     sens=4*data$V2     
-    cutoff=1e-44}   
-  
-  if (detector=="CEH2"){
-    psd_filename="PSD/curves_Jan_2020/ce2.txt"
-    data=read.table(psd_filename);
-    sens=data$V2        
-    cutoff=1e-44}  
+    cutoff=1e-44}
   
   if (detector=="CEL2"){
-    psd_filename="PSD/curves_Jan_2020/ce2.txt"
+    psd_filename=paste(psd_dir,"curves_Jan_2020/ce2.txt",sep='')
     data=read.table(psd_filename);
     sens=4*data$V2        
     cutoff=1e-44}
@@ -467,7 +463,7 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   if (exists("sens")==FALSE){
     stop(sprintf("Detector %s is not implemented in this code. 
                  You may want to use LHO, LLO, VIR, KAG, LAO, ET1, ET2, ET3,
-                 CEH or CEL",detector))
+                 CEH or CEL", detector))
   }
   
   n=length(f)
