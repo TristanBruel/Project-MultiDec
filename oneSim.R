@@ -37,7 +37,6 @@ dist=0.1
 detectors=c("LHO","LLO","VIR","KAG","LAO")
 nDet=length(detectors)
 
-signal_name="s20.0--LS220"
 signal_name="s15--3D_pole"
 
 fs=4096

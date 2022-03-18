@@ -95,6 +95,6 @@ true_gmode = function(TFmap, true_data, movBand=5, actPlot = FALSE){
 
   leg <- c("Maxima", "True_gmode ","Uncertainty");
   col <- c("black","blue","gray");
-  legend("topleft",legend=leg,cex=.8,col=col,pch=c(1,2,3));
+  legend("topleft",legend=leg,cex=1.,col=col,pch=c(1,2,3));
   
 }

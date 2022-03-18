@@ -492,7 +492,7 @@ covpbb_LASSO = function(r, mod, setStart = FALSE, m_L = 5, initfreq_L = c(0, Inf
         
         leg <- c("Simulation", "Estimation ","Uncertainty");
         col <- c("black","red","gray");
-        legend("topleft",legend=leg,cex=.8,col=col,pch=c(1,2,3));
+        legend("topleft",legend=leg,cex=1.,col=col,pch=c(1,2,3));
       } # end plot
       
       # discarding the true values which are out of the range of the predicted values
