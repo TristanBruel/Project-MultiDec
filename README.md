@@ -1,11 +1,5 @@
 # Project-MultiDec
-Taking into account several detectors 
 
-run projet.R to generate a signal, compute noisy and filtered data in the 3 detectors and draw spectrograms
-
-run inverse_whiteNoise.R to get the estimated hplus and hcross polarizations and their spectrograms from signals with white noise added
-
-run TFMap_realNoise.R to obtain the likelihood maps generated with the method X-Pipeline from signals with simulated LIGO noise
 
 # Bibliography
 
