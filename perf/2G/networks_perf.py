@@ -183,9 +183,9 @@ plt.xlabel('Distance [kpc]')
 plt.grid(True)
 
 fig_name = 'HLvsHLVKA_favourable.png';
-plt.savefig(folder+fig_name)
+plt.savefig(fig_name)
 fig_name = 'HLvsHLVKA_favourable.pdf';
-plt.savefig(folder+fig_name)
+plt.savefig(fig_name)
 
 plt.show()    
 
