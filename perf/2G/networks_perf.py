@@ -41,7 +41,7 @@ def smooth(y, sigma):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-folder = 'unfavourable'
+folder = 'favourable'
 
 # signals = ["s11.2--LS220", "s15.0--LS220", "s15.0--SFHo", "s15.0--GShen", 
 #             "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220"]
@@ -64,9 +64,9 @@ networks = ["HL", "HLVKA"]
 ls = ["--", "-"]
 markers = ['+', 'x']
 
-networks = ['HLVKA']
-ls = ['-']
-markers = ['x']
+# networks = ['HLVKA']
+# ls = ['-']
+# markers = ['x']
 
 ### Plotting parameters ###
 CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
@@ -133,7 +133,8 @@ for net in networks:
     
     lineObjects = ax.plot(dd, smooth(qq2,1), linestyle=ls[ind_net])
     plt.gca().set_prop_cycle(custom_cycler)
-    ax.plot(dd[:,0:sig_nb], qq2[:,0:sig_nb], marker=markers[ind_net], linestyle="", ms=7)
+    #ax.plot(dd[:,0:sig_nb], qq2[:,0:sig_nb], marker=markers[ind_net], linestyle="", ms=7)
+    ax.plot(dd, qq2, marker=markers[ind_net], linestyle="", ms=7)
     
     ind_net += 1
         
@@ -175,13 +176,9 @@ ax.tick_params(labelsize=0.8*fs)
 
 ax.grid(True)
 
-# fig_name = 'perfHLVKA_'+folder+'.png'
-# plt.savefig(fig_name, bbox_inches='tight')
-# fig_name = 'perfHLVKA_'+folder+'.pdf'
-# plt.savefig(fig_name, bbox_inches='tight')
-fig_name = 'perfHLVKA_2D_3D_'+folder+'.png'
+fig_name = 'perfHLVKA_'+folder+'.png'
 plt.savefig(fig_name, bbox_inches='tight')
-fig_name = 'perfHLVKA_2D_3D_'+folder+'.pdf'
+fig_name = 'perfHLVKA_'+folder+'.pdf'
 plt.savefig(fig_name, bbox_inches='tight')
 
 plt.show()    
