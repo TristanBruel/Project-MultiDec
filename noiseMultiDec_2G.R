@@ -29,9 +29,8 @@ dec=-16.18;
 ra=18.34;
 skyPosition=c(dec,ra);
 # Time of arrival at the center of Earth
-t0=1325048418; #favourable case
-#t0=1326225618; #unfavourable case
-
+t0=1330480818; #favourable case
+#t0=1326628818; #unfavourable case
 
 detectors=c("LHO","LLO","VIR", "KAG", "LAO");
 
@@ -45,7 +44,7 @@ fs=4096;
 filtering_method="spectrum";
 
 # loop over N generation of noisy data and add signal
-N=100;
+N=2000;
 
 result<-zeros(N,6);
 
@@ -55,8 +54,8 @@ true_data = wvfs$true_data;
 startTime = 0.1;   # signal starts 100ms after bounce (t=0)
 L = length(wvfs$time);   # number of samples
 
-l = 400L;  # interval length to use for each FFT
-p = 90L;   # overlapping percentage
+l = 400L; # interval length to use for each FFT
+p = 90L;  # overlapping percentage
 offset = as.integer(round((1-p/100)*l));   # offset between consecutive FTs
 transient = as.integer(0.05*fs+1);   # samples to ignore at the start and end (50ms)
 
@@ -67,7 +66,6 @@ freq = fs*seq(0,1/2,by=1/l);
 # To use always the same random noise realizations
 set.seed(1);
 
-#limits = rep(0,N)
 for (i in 1:N){
   d = data_multiDec(fs=fs,wvfs=wvfs,ampl=10/dist,detectors=detectors, 
                     filter=filtering_method, setseed=0,
@@ -93,7 +91,7 @@ for (i in 1:N){
   r2$E = r$E[1:length(r2$t),];
   
   out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                    actPlot=FALSE);
+                     actPlot=FALSE);
   
   result[i,1]=dist;
   result[i,2]=out$covpbb[1,1];
@@ -106,7 +104,7 @@ for (i in 1:N){
 print(sprintf("signal %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
                 signal_name, dist, mean(result[1:N,2]), median(result[1:N,2])));
 
-save_dir="./perf/2G/rmsd_favourable/HLVKA/";
+save_dir="./perf/2G/favourable/HLVKA/";
 dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
 filename=sprintf("results_AA_%s_f2_noise.txt", filtering_method);
 save_path=paste(save_dir, filename, sep='');
