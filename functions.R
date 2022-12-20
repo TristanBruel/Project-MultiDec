@@ -5,183 +5,129 @@ library(glmnet)
 
 
 ########################################################################
-findGmodes_LASSO = function(r, lambda = 1, 
-                            setStart = FALSE, m_L = 2, initfreq_L = c(0, 300),
-                            actPlot = FALSE){
+findGmodes_LASSO = function(r, lambda = 1,
+                            mask_t = NULL, mask_f = c(0.,100.), 
+                            actPlot = FALSE, saveToTxt = FALSE){
   ########################################################################
-  
-  # data must not contain zeros, so 'r' must not contain NA values
-  # finding g-modes
   
   # r : output from specPdgrm
   # lambda : penalization parameter
-  
-  # setStart : logical value to constrain the starting point
-  
+  # mask_t : time band in which the pixels of maximum intensity 
+  #           are not taken into account for the tracking
+  # mask_f : frequency band in which the pixels of maximum intensity 
+  #           are not taken into account for the tracking
   # actPlot   : logical value to produce plot
   
-  x = r$t; y = r$f; z = r$E; # values from spectrogram
+  x = r$t; y = r$f; E = r$E; # values from spectrogram
   
-  maxf = y[apply(z, 1, which.max)]; # maximum frequency at each time index
+  # frequency of maximum intensity at each time index
+  maxf = y[apply(E, 1, which.max)]; 
   
-  x = x[maxf>0];
-  maxf = maxf[maxf>0];
+  maxE = rep(0,length(x))
+  for (i in 1:length(x)){
+    maxE[i] = E[i, which.max(E[i,])]
+  }
+    
+  # Remove the maxima in the time band mask_t
+  if (!is.null(mask_t)){
+    t_masked = x<mask_t[1] | x>mask_t[2]
+    x = x[t_masked]
+    maxf = maxf[t_masked]
+    maxE = maxE[t_masked]
+  }
+  
+  # Remove the maxima in the frequency band mask_f
+  if (!is.null(mask_f)){
+    f_masked = maxf<mask_f[1] | maxf>mask_f[2]
+    x = x[f_masked]
+    maxf = maxf[f_masked]
+    maxE = maxE[f_masked]
+  }
+
+  #x = x[maxf>0];
+  #maxf = maxf[maxf>0];
   
   if (length(maxf)==0){ # in case all maxima are equal to zero
     return(rep(0,length(r$t)))
   }
+
+  # special case in which all the maxima are the same
+  if (length(count(maxf)$freq)==1){
+    return(rep(maxf[1],length(r$t)))
+  }
+  # standard case
+  Xmat <- cbind(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10);
+  weights = 10^maxE
+  lasso_model = glmnet(Xmat, maxf, alpha=1., lambda=lambda, weights=weights);
+  #lasso_model = glmnet(Xmat, maxf, alpha=1., lambda=lambda);
   
-  if (setStart){
-    # limiting frequencies according to initfreq in y
-    inity = (y >= initfreq_L[1]) & (y <= initfreq_L[2]); # logical vector
-    
-    initz = z[1:m_L, ]; # m first columns of the spectrogram
-    
-    if(m_L != 1){
-      
-      if(initfreq_L[1] != -Inf || initfreq_L[2] != Inf){
-        initz[, !inity] = -Inf; # discarding certain freq according to initfreq
-      }
-      mp = apply(initz, 1, which.max); # maximum in first m columns of spectrogram
-      mp = round(median(mp)); # position maximum value
-      
-    }else if(m_L == 1){
-      
-      initz = z[1,]; # last column of spectrogram
-      
-      if(initfreq_L[1] != -Inf || initfreq_L[2] != Inf){
-        initz[!inity] = -Inf;
-      }
-      
-      mp = which.max(z[1,]); # position maximum value
-      
-    }
-    
-    # we'll force the fit to pass through t0 and f[mp]
-    x0 = x[1];
-    y0 = y[mp];
-    
-    Xmat0 <- cbind(x-x0, (x-x0)^2, (x-x0)^3, (x-x0)^4, (x-x0)^5, (x-x0)^6, 
-                  (x-x0)^7, (x-x0)^8, (x-x0)^9, (x-x0)^10);
-    
-    lasso_model = glmnet(Xmat0, maxf-y0, alpha=1, lambda=lambda, intercept=FALSE);
-    maxf_fit = predict(lasso_model, Xmat0)+y0;
-    
-    
-    if(actPlot){
-      image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]",
-                 cex.lab=1.8, cex.axis=1.5)
-      points(x, maxf, col='blue',pch=19)
-      points(x, maxf_fit, col='black',pch=19)
-      points(x0, y0, col = "green", pch = 19); # blue point in the plot
-    }
-    
-    ## Second iteration
-    # Compute the rsmd and remove the maxf values further away from the fit
-    rmsd = sqrt(sum((maxf_fit-maxf)^2)/length(maxf))
-    indices = abs(maxf-maxf_fit)<rmsd;
-    indices = abs(maxf-maxf_fit)<100;
-    maxf2 = maxf[indices]-y0;
-    t2 = x[indices]-x0;
-    
-    # special case in which all the maxima are the same
-    if (length(count(maxf2)$freq)==1){ 
-      return(rep(maxf2[1],length(r$t)))
-    }
-    
-    # Fit again
-    Xmat2 <- cbind(t2, t2^2, t2^3, t2^4, t2^5, t2^6, 
-                   t2^7, t2^8, t2^9, t2^10);
-    
-    lasso_model = glmnet(Xmat2, maxf2, alpha=1, lambda=lambda, intercept=FALSE);
-    lasso_coef <- coef(lasso_model);
-    
-    maxf_fit = 0;
-    for (k in 2:length(lasso_coef)){
-      maxf_fit = maxf_fit+lasso_coef[k]*(r$t-x0)^(k-1)
-    }
-    maxf_fit = maxf_fit+y0;
-    
-    if(actPlot){
-      image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]",
-                 cex.lab=1.8, cex.axis=1.5)
-      points(t2+x0, maxf2+y0, col='blue',pch=19)
-      points(r$t, maxf_fit, col='black',pch=19)
-      points(x0, y0, col = "green", pch = 19); # green point on the plot
-      
-      leg <- c("Maxima", "Fit")#,"Uncertainty");
-      col <- c("blue","black")#,"gray");
-      legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
-    }
+  maxf_fit = predict(lasso_model, Xmat);
+  
+  if(actPlot){
+    image.plot(r$t,y,E,xlab="Time [s]",ylab="Frequency [Hz]",
+               cex.lab=1.8, cex.axis=1.5)
+    points(x, maxf, col='blue',pch=19)
+    points(x, maxf_fit, col='black',pch=19)
+    leg <- c("Maxima", "First fit")#,"Uncertainty");
+    col <- c("blue","black")#,"gray");
+    legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
   }
   
-  # case without any constraint on the starting point
-  else{
+  ## Second iteration
+  # Compute the rsmd and remove the maxf values further away from the fit
+  rmsd = sqrt(sum((maxf_fit-maxf)^2)/length(maxf));
+  mask = abs(maxf-maxf_fit)<rmsd;
+  #mask = abs(maxf-maxf_fit)<400;
+  maxf2 = maxf[mask];
+  t2 = x[mask];
+  maxE2 = maxE[mask]
+  
+  # special case in which the fit is too far from the maxima
+  if (length(maxf2)==0){
+    return(rep(0,length(r$t)))
+  }
+  
+  # special case in which all the maxima are the same
+  if (length(count(maxf2)$freq)==1){ 
+    return(rep(maxf2[1],length(r$t)))
+  }
+  
+  # Fit again
+  Xmat2 <- cbind(t2, t2^2, t2^3, t2^4, t2^5, t2^6, 
+                 t2^7, t2^8, t2^9, t2^10);
+  weights2 = 10^maxE2
+  lasso_model = glmnet(Xmat2, maxf2, alpha=1., lambda=lambda, weights=weights2);
+  #lasso_model = glmnet(Xmat2, maxf2, alpha=1., lambda=lambda);
+  
+  lasso_coef <- coef(lasso_model);
+  maxf_fit = 0;
+  for (k in 1:length(lasso_coef)){
+    maxf_fit = maxf_fit+lasso_coef[k]*r$t^(k-1)
+  }
+  
+  if(actPlot){
+    image.plot(r$t,y,E,xlab="Time [s]",ylab="Frequency [Hz]",
+               cex.lab=1.8, cex.axis=1.5)
+    points(t2, maxf2, col='blue',pch=19)
+    points(r$t, maxf_fit, col='black',pch=19)
+    leg <- c("Close maxima", "Second fit")#,"Uncertainty");
+    col <- c("blue","black")#,"gray");
+    legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
     
-    # special case in which all the maxima are the same
-    if (length(count(maxf)$freq)==1){
-      return(rep(maxf[1],length(r$t)))
-    }
-    # normal case
-    Xmat <- cbind(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10);
-    lasso_model = glmnet(Xmat, maxf, alpha=1, lambda=lambda);
-    maxf_fit = predict(lasso_model, Xmat);
-    
-    if(actPlot){
-      image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]",
-                 cex.lab=1.8, cex.axis=1.5)
-      points(x, maxf, col='blue',type="p")
-      points(x, maxf_fit, col='black',type="p")
-      
-      leg <- c("Maxima", "Fit")#,"Uncertainty");
-      col <- c("blue","black")#,"gray");
-      legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
-    }
-    
-    ## Second iteration
-    # Compute the rsmd and remove the maxf values further away from the fit
-    rmsd = sqrt(sum((maxf_fit-maxf)^2)/length(maxf))
-    indices = abs(maxf-maxf_fit)<rmsd;
-    maxf2 = maxf[indices];
-    t2 = x[indices];
-    
-    # special case in which the fit is too far from the maxima
-    if (length(maxf2)==0){
-      return(rep(0,length(r$t)))
-    }
-    
-    # special case in which all the maxima are the same
-    if (length(count(maxf2)$freq)==1){ 
-      return(rep(maxf2[1],length(r$t)))
-    }
-    
-    # Fit again
-    Xmat2 <- cbind(t2, t2^2, t2^3, t2^4, t2^5, t2^6, 
-                   t2^7, t2^8, t2^9, t2^10);
-    
-    lasso_model = glmnet(Xmat2, maxf2, alpha=1, lambda=lambda);
-    lasso_coef <- coef(lasso_model);
-    
-    maxf_fit = 0;
-    for (k in 1:length(lasso_coef)){
-      maxf_fit = maxf_fit+lasso_coef[k]*r$t^(k-1)
-    }
-    maxf_fit = maxf_fit;
-    
-    
-    if(actPlot){
-      image.plot(r$t,y,z,xlab="Time [s]",ylab="Frequency [Hz]",
-                 cex.lab=1.8, cex.axis=1.5)
-      #points(t2, maxf2, col='blue',pch=19)
-      points(x, maxf, col='blue',pch=19)
-      points(r$t, maxf_fit, col='black',pch=19)
-      #arrows(r$t, pred[,2], r$t, pred[,3], code=3, angle=90,
-      #       length=0.05, col="gray",pch=3);
-      
-      leg <- c("Maxima", "Fit")#,"Uncertainty");
-      col <- c("blue","black")#,"gray");
-      legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
-    }
+    image.plot(r$t,y,E,xlab="Time [s]",ylab="Frequency [Hz]",
+               cex.lab=1.8, cex.axis=1.5)
+    points(x, maxf, col='blue',pch=19)
+    points(r$t, maxf_fit, col='black',pch=19)
+    leg <- c("Maxima", "Fit")#,"Uncertainty");
+    col <- c("blue","black")#,"gray");
+    legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
+  }
+  
+  if (saveToTxt){
+    dir.create(path='oneSim/stdLike/', showWarnings=FALSE, recursive=TRUE);
+    write.table(list(x,maxf),'oneSim/stdLike/maxf.txt', row.names = FALSE, col.names = FALSE);
+    write.table(list(r$t,maxf_fit),'oneSim/stdLike/fit.txt', row.names = FALSE, col.names = FALSE);
+    print('Text files for maxima tracking saved in ./oneSim/stdLike/')
   }
   
   return(maxf_fit);
@@ -283,7 +229,7 @@ ints = function(n, l, p = 00, eq = TRUE){
   
   #cat(paste("The number of data subsets is ",dim(index)[1], sep=""),"\n");
   
-  if(eq == TRUE){
+  if(eq){
     
     lint = dim(index)[1]
     index[lint, 1] = n - l + 1;
@@ -318,29 +264,27 @@ ints = function(n, l, p = 00, eq = TRUE){
 
 
 ########################################################################
-covpbb_LASSO = function(r, mod, setStart = FALSE, m_L = 5, initfreq_L = c(0, Inf),
-                       movBand = 5, timeGmode = NULL, true_data, limFreq = NULL,
-                       actPlot = FALSE){
+covpbb_LASSO = function(r, mod, movBand = 5, true_data, timeGmode = NULL,
+                        limFreq = NULL, mask_t = NULL, mask_f = c(0., 1.), 
+                        actPlot = FALSE, saveToTxt = FALSE){
   ########################################################################  
   
   # r   : time-frequency map (output of timeFreqMaps.R)
   # mod : fit model describing the evolution of the ratio with frequency
-  
-  # setStart   : logical value to constrain starting value
-  # m_L        : number of time bins used to calculate starting value
-  # initfreq_L : interval to restrict frequency for the starting value
-  
   # movBand   : define the number of points to smooth the band
-  # timeGMode : time interval to define g-modes
   # true_data : simulated ratio time evolution where ratio is M/R^2 (g2 mode)
+  # timeGMode : time interval to define g-modes
   # limFreq   : specifies upper threshold (in Hz) for the estimated g-modes
   # actPlot   : logical value to produce plot
   
-  ### ###
   true_time = true_data$time; 
   true_ratios = true_data$ratio;
   
   timefreq = r$t;
+  
+  maxf = findGmodes_LASSO(r, lambda=1,
+                          mask_t=mask_t, mask_f=mask_f, 
+                          actPlot=actPlot, saveToTxt=saveToTxt);
   
   # g-modes
   if( !is.null(timeGmode)){
@@ -353,191 +297,173 @@ covpbb_LASSO = function(r, mod, setStart = FALSE, m_L = 5, initfreq_L = c(0, Inf
                     return(FALSE);
                   }
                 });
-    
     timefreq = timefreq[out];
-    
-    r$t = r$t[out];
-    r$E = r$E[out, ]; # row=time, col=freq
-  }
-
-  
-  maxfs = findGmodes_LASSO(r, lambda=1, setStart=setStart, m_L=m_L, 
-                           initfreq_L=initfreq_L, actPlot=actPlot);
-  
-  if(actPlot){
-    image.plot(r$t,r$f,r$E,xlab="Time [s]",ylab="Frequency [Hz]",
-               cex.lab=1.8, cex.axis=1.5)
-    points(timefreq, maxfs, col='black', pch=19)
-    
-    leg <- c("g2-mode tracking")
-    col <- c("black")
-    legend("topleft",legend=leg,cex=1.,col=col,pch=c(19,19));
+    maxf = maxf[out]
   }
   
   if(is.null(limFreq)){
-    
     limFreq = Inf; # case in which there is no threshold for frequencies
-    
   }
   
   out1 = NULL; # to store output - coverage probability
   out2 = NULL; # to store output - stat of residuals
   out3 = NULL; # to store output - chi2
-  
-  maxf = maxfs;
-  
-  for(j in limFreq){
-    #print(j)
-    #discFreq = (maxf < j); # positions to keep 
-    discFreq = rep(TRUE,length(maxf));   # positions to keep
-    for (k in 1:length(maxf)){
-      if(maxf[k]>j){
-        discFreq[k:length(maxf)]=FALSE;
-      }
-    }
-    
-    sfq = sum(discFreq);
-    
-    if(sfq <= 2){ 
-      if(sfq == 0){
-        #warning(paste("All frequencies are greater than limFreq", j));
-      }else{
-        #warning(paste("Only", sfq, "frequency is lower than limFreq", j));
-      }
-      if(any(class(mod) == "lm")){
-        out1 = rbind(out1, c(0, 1));
-        out2 = rbind(out2, c(1, 1, 1));
-        out3 = rbind(out3, c(1));
-      }
-      else {
-        out1 = rbind(out1, c(0, 1));
-        out2 = rbind(out2, c(1, 1, 1));
-        out3 = rbind(out3, c(1));
-      }                
-    }
-    else { # At least 3 g-modes in maxf are required to generate the covpbb band
-      maxf1     = maxf[discFreq]; # discarding frequencies according to limFreq
-      timefreq1 = timefreq[discFreq]; # discarding time points
-      
-      # defining true ratios in the band limit given by limfreq 
-      discTime = (true_time >= min(timefreq1)) & (true_time <= max(timefreq1));
-      true_time1 = true_time[discTime];  
-      true_ratio1 = true_ratios[discTime];
-      
-      # prediction : pred$fit pred$lwr pred$upr
-      new  = data.frame(f = maxf1);
-      
-      if(any(class(mod) == "lm")){
-        pred = predict(mod, new, interval = "prediction"); # predictions
-      }else if(any(class(mod) == "lmvar")){
-        f    = maxf1;
-        
-        ### mu ###
-        x = colnames(mod$X_mu)
-        if(x[1] == "(Intercept)"){
-          
-          X_mu = apply(as.matrix(x[-1]),1, function(y)eval(parse(text = y)));
-          colnames(X_mu) = colnames(mod$X_mu)[-1];
-          
-        }else{
-          
-          X_mu = apply(as.matrix(x), 1, function(y)eval(parse(text = y)));
-          colnames(X_mu) = colnames(mod$X_mu);
-        }
-        
-        ### sigma ###
-        x = colnames(mod$X_s);
-        if(x[1] == "(Intercept_s)"){
-          
-          X_s = apply(as.matrix(x[-1]),1, function(y)eval(parse(text = y)));
-          colnames(X_s)  = colnames(mod$X_s)[-1];
-          
-        }else{
-          
-          X_s = apply(as.matrix(x), 1, function(y)eval(parse(text = y)));
-          colnames(X_s)  = colnames(mod$X_s);
-          
-        }
-        
-        pred = predict(mod, X_mu = X_mu, X_sigma = X_s, 
-                       interval = "prediction", sigma = FALSE); # predictions
-      }
-      
-      ### generating band function ### 
-      
-      # interpolating lower bound for predicted values
-      fd = approxfun(x = timefreq1, y = movf(pred[,2],n=movBand,mean), method = "linear",
-                     yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
-      # interpolating upper bound for predicted values
-      fu = approxfun(x = timefreq1, y = movf(pred[,3],n=movBand,mean), method = "linear",
-                     yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
-      # interpolating point estimates
-      fm = approxfun(x = timefreq1, y = movf(pred[,1],n=movBand,mean), method = "linear",
-                     yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
-      
-      # fd & fu use smooth confidence intervals by using "movf"
-      aux = cbind(true_ratio1,          # true ratios
-                  fd(true_time1),  # lower band (using predicted ratios)
-                  fu(true_time1)); # upper band (using predicted ratios)
-      
-      if(actPlot == TRUE){
-        yaux = c(true_ratios, pred[,2:3]);
-        plot(true_time1, true_ratio1, xlab = "Time [s]", xlim=c(min(true_time1)*.9,max(true_time1)*1.05),
-             ylab = "Ratio", ylim = c(min(yaux), 1.3*max(true_ratio1)), type = "n",
-             cex.lab=1.8, cex.axis=1.5);
-        arrows(timefreq1, pred[,2], timefreq1, pred[,3], code=3, angle=90,
-               length=0.05, col="gray",pch=3);
-        points(true_time1, true_ratio1, col = "black", pch=1);
-        points(timefreq1, pred[,1], col = "red", cex = pred[,1]/max(pred[,1])+ 0.3, pch=2);
-        
-        leg <- c("Simulation", "Estimation ","Uncertainty");
-        col <- c("black","red","gray");
-        legend("topleft",legend=leg,cex=1.,col=col,pch=c(1,2,3));
-      } # end plot
-      
-      # discarding the true values which are out of the range of the predicted values
-      
-      # left side
-      disc = which(is.na(aux[,2]));
-      
-      if(length(disc) != 0){
-        aux = aux[-disc,];
-      }
-      
-      # right side
-      disc = which(is.na(aux[,3]));
-      
-      if(length(disc) != 0){
-        aux = aux[-disc,];
-      }
-      
-      # testing if the true ratios are inside the bands
-      prop = apply(aux, 1, 
-                   function(x){
-                     if((x[1]>= x[2]) && (x[1] <= x[3])){
-                       return(1);
-                     }else{
-                       return(0);
-                     }
-                   });
-      
-      aux[aux[,2]<0,2] = 0; # it replaces negative values in lower limit
-      
-      l = aux[,3] - aux[,2];
-      p = mean(prop);
-      out1 = rbind(out1, c(p, median(l))); # covpbb & medBandWidth
-      
-      # Residual, RMS & precision
-      res  = true_ratio1 - fm(true_time1); # true_value - estimate
-      res_absres = mean(abs(res))
-      res_MSE = mean(res^2)
-      res_precision = mean(abs(res)/true_ratio1)
-      
-      out2 = rbind(out2, c(res_absres, res_MSE, res_precision));
 
-    } # end 'all(discFreq)'
+  discFreq = rep(TRUE,length(maxf));   # positions to keep
+  for (k in 1:length(maxf)){
+    if(maxf[k]>limFreq){
+      discFreq[k:length(maxf)]=FALSE;
+    }
+  }
+  
+  sfq = sum(discFreq);
+  
+  if(sfq <= 2){ 
+    if(sfq == 0){
+      #warning(paste("All frequencies are greater than limFreq", j));
+    }else{
+      #warning(paste("Only", sfq, "frequency is lower than limFreq", j));
+    }
+    if(any(class(mod) == "lm")){
+      out1 = rbind(out1, c(-1, -1));
+      out2 = rbind(out2, c(-1, -1, -1));
+      out3 = rbind(out3, c(-1));
+    }
+    else {
+      out1 = rbind(out1, c(0, 1));
+      out2 = rbind(out2, c(-2, -2, -2));
+      out3 = rbind(out3, c(-2));
+    }                
+  }
+  else { # At least 3 g-modes in maxf are required to generate the covpbb band
+    maxf1     = maxf[discFreq]; # discarding frequencies according to limFreq
+    timefreq1 = timefreq[discFreq]; # discarding time points
     
-  } # end loop
+    # defining true ratios in the band limit given by limfreq 
+    discTime = (true_time >= min(timefreq1)) & (true_time <= max(timefreq1));
+    true_time1 = true_time[discTime];  
+    true_ratio1 = true_ratios[discTime];
+    
+    # prediction : pred$fit pred$lwr pred$upr
+    new  = data.frame(f = maxf1);
+    
+    if(any(class(mod) == "lm")){
+      pred = predict(mod, new, interval = "prediction"); # predictions
+    }
+    else if(any(class(mod) == "lmvar")){
+      f = maxf1;
+      
+      ### mu ###
+      x = colnames(mod$X_mu)
+      if(x[1] == "(Intercept)"){
+        
+        X_mu = apply(as.matrix(x[-1]), 1, function(y)eval(parse(text = y)));
+        colnames(X_mu) = colnames(mod$X_mu)[-1];
+        
+      }else{
+        
+        X_mu = apply(as.matrix(x), 1, function(y)eval(parse(text = y)));
+        colnames(X_mu) = colnames(mod$X_mu);
+      }
+      
+      ### sigma ###
+      x = colnames(mod$X_s);
+      if(x[1] == "(Intercept_s)"){
+        
+        X_s = apply(as.matrix(x[-1]), 1, function(y)eval(parse(text = y)));
+        colnames(X_s) = colnames(mod$X_s)[-1];
+        
+      }else{
+        
+        X_s = apply(as.matrix(x), 1, function(y)eval(parse(text = y)));
+        colnames(X_s) = colnames(mod$X_s);
+        
+      }
+      
+      pred = predict(mod, X_mu = X_mu, X_sigma = X_s, 
+                     interval = "prediction", sigma = FALSE); # predictions
+    }
+    
+    if (saveToTxt){
+      dir.create(path='oneSim/stdLike/', showWarnings=FALSE, recursive=TRUE);
+      write.table(list(true_time1,true_ratio1),'oneSim/stdLike/true_ratio.txt', row.names = FALSE, col.names = FALSE);
+      write.table(list(timefreq1,pred),'oneSim/stdLike/pred.txt', row.names = FALSE, col.names = FALSE);
+      print('Text files for ratio reconstruction saved in ./oneSim/stdLike/')
+    }
+    
+    ### generating band function ### 
+    
+    # interpolating lower bound for predicted values
+    fd = approxfun(x = timefreq1, y = movf(pred[,2],n=movBand,mean), method = "linear",
+                   yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
+    # interpolating upper bound for predicted values
+    fu = approxfun(x = timefreq1, y = movf(pred[,3],n=movBand,mean), method = "linear",
+                   yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
+    # interpolating point estimates
+    fm = approxfun(x = timefreq1, y = movf(pred[,1],n=movBand,mean), method = "linear",
+                   yleft = NA, yright = NA, rule = 1, f = 0, ties = "mean");
+    
+    # fd & fu use smooth confidence intervals by using "movf"
+    aux = cbind(true_ratio1,          # true ratios
+                fd(true_time1),  # lower band (using predicted ratios)
+                fu(true_time1)); # upper band (using predicted ratios)
+    
+    if(actPlot){
+      yaux = c(true_ratios, pred[,2:3]);
+      plot(true_time1, true_ratio1, xlab = "Time [s]", xlim=c(min(true_time1)*.9,max(true_time1)*1.05),
+           ylab = "Ratio", ylim = c(min(yaux), 1.3*max(true_ratio1)), type = "n",
+           cex.lab=1.8, cex.axis=1.5);
+      arrows(timefreq1, pred[,2], timefreq1, pred[,3], code=3, angle=90,
+             length=0.05, col="gray",pch=3);
+      points(true_time1, true_ratio1, col = "black", pch=1);
+      points(timefreq1, pred[,1], col = "red", cex = pred[,1]/max(pred[,1])+ 0.3, pch=2);
+      
+      leg <- c("Simulation", "Estimation ","Uncertainty");
+      col <- c("black","red","gray");
+      legend("topleft",legend=leg,cex=1.,col=col,pch=c(1,2,3));
+    } # end plot
+    
+    # discarding the true values which are out of the range of the predicted values
+    
+    # left side
+    disc = which(is.na(aux[,2]));
+    
+    if(length(disc) != 0){
+      aux = aux[-disc,];
+    }
+    
+    # right side
+    disc = which(is.na(aux[,3]));
+    
+    if(length(disc) != 0){
+      aux = aux[-disc,];
+    }
+    
+    # testing if the true ratios are inside the bands
+    prop = apply(aux, 1, 
+                 function(x){
+                   if((x[1]>= x[2]) && (x[1] <= x[3])){
+                     return(1);
+                   }else{
+                     return(0);
+                   }
+                 });
+    
+    aux[aux[,2]<0,2] = 0; # it replaces negative values in lower limit
+    
+    l = aux[,3] - aux[,2];
+    p = mean(prop);
+    out1 = rbind(out1, c(p, median(l))); # covpbb & medBandWidth
+    
+    # Residual, RMS & precision
+    res  = true_ratio1 - fm(true_time1); # true_value - estimate
+    res_absres = mean(abs(res))
+    res_MSE = mean(res^2)
+    res_precision = mean(abs(res)/true_ratio1)
+    
+    out2 = rbind(out2, c(res_absres, res_MSE, res_precision));
+
+  } # end 'all(discFreq)'
   
   # colnames
   colnames(out1) = c("covpbb", "medBandWidth");
@@ -546,4 +472,59 @@ covpbb_LASSO = function(r, mod, setStart = FALSE, m_L = 5, initfreq_L = c(0, Inf
   R = list(covpbb = out1, residual = out2);
   
   return(R);
+}
+
+
+########################################################################
+compute_SNR = function(wvf, detector="LHO", fcut=0, dist=10, 
+                       pbOff=FALSE, actPlot=FALSE){
+  ########################################################################
+  # Compute the Signal-To-Noise ratio for a given wvf (x$time, x$hoft) 
+  # and a given detector
+  
+  fs=round(1/(wvf$time[2]-wvf$time[1]))
+  n=length(wvf$hoft)
+  a = nextpow2(2*n)         #zero padding and rounding to the next power of 2
+  n2=2^a
+  
+  # If pbOff remove 0.100s after the bounce (set hoft values to 0)
+  if (pbOff){
+    ext=which(wvf$time<0.1)
+    wvf$hoft[ext]=0
+  }
+  
+  freq2 = fs*fftfreq(n2)       # two-sided frequency vector
+  freq2[1]=0.001               # to avoid plotting pb in logscale
+  freq1=freq2[1:floor(n2/2)]   # one-sided frequency vector
+  
+  # Get the 1 sided PSD
+  psd=PSD_fromfiles(freq1, 1, detector, actPlot)
+  
+  vec=rep(0,n2)
+  for (i in 1:n){
+    vec[n2/4+i]=vec[n2/4+i]+wvf$hoft[i]*10./dist
+  }  
+  
+  hf=fft(vec);
+  
+  hf=hf[1:(n2/2)]   # The integral is performed over positive freqs
+  
+  hf=subset(hf,freq1-fcut>0)
+  psd=subset(psd,freq1-fcut>0)
+  freq1=subset(freq1, freq1-fcut>0)
+  
+  snr=sqrt(4/fs/n2*sum(abs(hf)^2/psd))
+  
+  if (actPlot){
+    plot (freq1, sqrt(freq1)*abs(hf), log="xy", type="l", 
+          xlab="Frequency", ylab="hchar", xlim=c(1, fs/2), ylim=c(1e-24,1e-20), 
+          col="grey", pch=1, panel.first = grid(),
+          cex.lab=1.8, cex.axis=1.5)
+    points(freq1,sqrt(psd), type="l", col="black",pch=2)
+    leg = c("sqrt(fs) x h~(f)", "ASD")
+    col = c("grey","black")
+    legend (x=1,y=6e-22,legend=leg,cex=1.,col=col,pch=c(1,2))
+    title(c("SNR:",snr))
+  }
+  return(snr)  
 }

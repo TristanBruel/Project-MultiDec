@@ -1,9 +1,9 @@
-library ("stats")
-library ("signal")
+library("stats")
+library("signal")
 library("stringr")
-library ("seewave")
-library ("psd")
-library ("pracma")
+library("seewave")
+library("psd")
+library("pracma")
 library("plyr")
 
 source("multiDec_algebra.R")
@@ -15,17 +15,17 @@ source("multiDec_algebra.R")
 
 
 ########################################################################
-signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
+signal_multiDec = function(dec=0, ra=0, t=0, fs=4096,
                            signal="s20.0--LS220", detectors=c("LHO","LLO","VIR"), 
                            pbOff=TRUE, verbose=FALSE, actPlot=FALSE){
   ######################################################################
   # Inputs:  sky position of the source
-  #               declination in ?, right ascension in hours
-  #          time GPS at which the wave arrives at the center of the Earth
+  #               declination in degree, right ascension in hours
+  #          GPS time (in seconds) at which the wave arrives at the center of the Earth
   #          sampling frequency of the output time series
   #          name of the simulated waveform
   #          detectors in which the signal will be measured
-  #          first 100ms after bounce removed
+  #          first 100ms after bounce removed (if pbOff)
   #
   # Outputs: time series for the given detectors
   #          wvf_LHO   time: time vector
@@ -37,7 +37,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
   folder="inputs/2D_simulations/"
   
   # Metadata  
-  metadata_filename = paste(folder,"waveforms/metadata.csv", sep="");
+  metadata_filename = paste(folder,"metadata.csv", sep="");
   meda = read.csv(metadata_filename, stringsAsFactors=FALSE);
   colnames(meda) = c("name","wvf_name","truedata_name", "tb");
   index=which(meda$name == signal);
@@ -93,7 +93,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
 
   
   # remove times corresponding to the post-bounce period (100 ms)
-  if (pbOff==TRUE){
+  if (pbOff){
     true_data=subset(true_data, true_data$time>=0.1);
     hplus=hplus[time>=0.1];
     hcross=hcross[time>=0.1];
@@ -108,7 +108,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
   nDet=length(detectors);
   res=list();
   # antenna responses and time delay for each detector
-  F=antenna_patterns(dec,ra,t,pol,detectors);
+  F=antenna_patterns(dec,ra,t,pol=0,detectors);
   if (verbose){
     print("Antenna response matrix : F")
     print(F)
@@ -127,14 +127,22 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
     hoft[startGW:endGW]= Fplus*hplus + Fcross*hcross;
     
     # Plot
-    if (actPlot == TRUE){
-      plot(sXX$time,sXX$hplus,type='l',xlab="Time after bounce [s]",ylab="Hoft",
+    if (actPlot){
+      #plot(sXX$time,sXX$hplus,type='l',xlab="Time after bounce [s]",ylab="Hoft",
+      #     main=paste(signal,"in",detectors[k]),panel.first = grid(),
+      #     xlim=c(min(sXX$time,time),max(sXX$time,time)),
+      #     cex.lab=1.8, cex.axis=1.5)
+      #lines(time,hoft,col='red')
+      #leg=(c(paste("wvf @",fs_orig),paste("resampled hoft @",fs)))
+      #col=c("black","red")
+      #legend ("topleft", legend=leg,cex=1.,col=col,pch=c(1,2))
+      plot(time,hoft,type='l',xlab="Time after bounce [s]",ylab="Hoft",
            main=paste(signal,"in",detectors[k]),panel.first = grid(),
-           xlim=c(min(sXX$time,time),max(sXX$time,time)))
-      lines(time,hoft,col='red')
-      leg=(c(paste("wvf @",fs_orig),paste("resampled hoft @",fs)))
-      col=c("black","red")
-      legend ("topleft", legend=leg,col=col,pch=c(1,2))
+           xlim=c(min(sXX$time,time),max(sXX$time,time)),
+           cex.lab=1.8, cex.axis=1.5)
+      leg=(paste("resampled hoft @",fs))
+      col=c("black")
+      legend ("topleft",legend=leg,cex=1.,col=col,pch=c(1,2))
     }
     
     res$wvf=hoft
@@ -145,7 +153,7 @@ signal_multiDec = function(dec=50, ra=10, t=1302220800, pol=0, fs=4096,
   res$true_data = true_data;
   
   # Time delays between the arrivals at each detector
-  if ((verbose==TRUE) & (nDet>1)){
+  if ((verbose) & (nDet>1)){
     for (k in 2:nDet){
       print(sprintf("Time delay between %s and %s is %s ms",detectors[1],
                     detectors[k],1000*delays[k]))
@@ -190,8 +198,8 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
     # The output vector will be 2 times larger than n
     factor=2
     
-    # Add noise
-    data=noise_generator(factor,fs, duration, detectors[k], setseed=setseed, 
+    # Create noise
+    data=noise_generator(factor, fs, duration, detectors[k], setseed=setseed, 
                          filter=FALSE, actPlot=FALSE, verbose=FALSE)
     
     Y=data$x
@@ -230,11 +238,11 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
     if (actPlot){
       if (filter == "HP" || filter == "spectrum" || filter == "prewhiten" || filter == "AR"){
         plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
-             xlab="Time [s]",ylab="Hoft",main=detectors[k])
+             xlab="Time [s]",ylab="Hoft",main=detectors[k], cex.lab=1.8, cex.axis=1.5)
         points(T, YY, col="red", type="l", pch=2);        # (noise + signal) filtered 
         leg = c("noise+signal", "(noise+signal) filtered")
         col = c("black","red")
-        legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,2))
+        legend ("topleft",legend=leg,cex=1.,col=col,pch=c(1,2))
         
         plot(Tf, Yf, col="black", type="l", pch=1, panel.first = grid(), 
              xlab="Time [s]",ylab="Hoft", main=detectors[k])
@@ -243,8 +251,7 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
         
         leg = c("noise", "(noise+signal) filtered", "signal only")
         col = c("black","red","green")
-        legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,3))
-        
+        legend ("topleft",legend=leg,cex=1.,col=col,pch=c(1,3))
         
         # spectrum estimated
         psdest <- pspectrum(Y, Y.frqsamp=fs, ntap.init=NULL, Nyquist.normalize = TRUE, plot=FALSE,verbose=FALSE)
@@ -271,14 +278,15 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
         lines(freq1, sqrt(2*psd[1:floor(n_data/2)]), col="red", pch=3)         # PSD is 2 sided PSD
         
         legend_str=c("col noise FT", "col noise spectrun", "ASD model", "filtered FT", "filtered spectrum")
-        legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))
+        legend ("topright",legend=legend_str,cex=1.,col=c("grey","blue","red","black","green"),pch=c(1,2,3,4,5))
         
       
       }else{
-        plot (Tf, Yf, type="l", col="black", main=detectors[k])
-        legend (x=Tf[1]*1.1, y=max(Yf)*.9, legend="noise+signal")
+        plot(Tf, Yf, type="l", col="black", main=detectors[k])
+        legend(x=Tf[1]*1.1,y=max(Yf)*.9,legend="noise+signal")
       }
     }
+    
   res$data=data.frame(t=Tf,x=Yf,y=YYf)
   res=rename(res,c("data"=sprintf("data_%s",detectors[k])))
   }
@@ -289,7 +297,7 @@ data_multiDec = function (fs=4096, wvfs, ampl=1, detectors=c("LHO","LLO","VIR"),
 
 
 ########################################################################
-noise_generator = function (factor,fs, duration, detector, setseed=0,
+noise_generator = function (factor, fs, duration, detector, setseed=0,
                             filter=FALSE, actPlot=FALSE, verbose=FALSE){
   ######################################################################
   # Inputs :  fs: sampling frequency
@@ -316,7 +324,7 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     n=duration*fs+1
   }
   
-  if (verbose==TRUE){
+  if (verbose){
     print(sprintf("noise_generator:size of the noise output vector:%d", n))
   }
   
@@ -361,11 +369,12 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
   if (actPlot){
     # Time series
     T = seq(0, n-1, by = 1)/fs;
-    plot(T, Y, col="black", type="l", pch=1, panel.first = grid())
+    plot(T, Y, col="black", type="l", pch=1, panel.first = grid(), 
+         cex.lab=1.8, cex.axis=1.5)
     points(T, YY, col="red", type="l",pch=2)
   
     leg=c("simulated noise", "filtered noise")
-    legend (x=0, y=abs(max(Y)), legend=leg, col=c("black","red"), pch=c(1,2))   
+    legend (x=0,y=abs(max(Y)),legend=leg,cex=1.,col=c("black","red"),pch=c(1,2))   
     
     # spectrum estimated
     psdest <- pspectrum(Y, Y.frqsamp=fs, ntap.init=NULL, Nyquist.normalize = TRUE, plot=FALSE,verbose=FALSE)
@@ -388,9 +397,9 @@ noise_generator = function (factor,fs, duration, detector, setseed=0,
     lines(freq1, sqrt(2*psd[1:floor(n/2)]), col="red", pch=3)         # PSD is 2 sided PSD
     
     legend_str=c("col data FT", "col data spectrun", "ASD model", "filtered FT", "filtered spectrum")
-    legend ("topright", legend=legend_str, col=c("grey","blue","red","black","green"), pch=c(1,2,3,4,5))   
+    legend ("topright",legend=legend_str,cex=1.,col=c("grey","blue","red","black","green"),pch=c(1,2,3,4,5))   
     
-    if (verbose==TRUE){
+    if (verbose){
       s1 <- sqrt(2*trapz(fs*psdest$freq[1:floo(rn/2)], psdest$spec[1:floor(n/2)]/fs))
       print(sprintf("noise_generator:colored noise rms:%g", s1))
       
@@ -432,7 +441,6 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   
   if (detector=="KAG"){
     psd_filename=paste(psd_dir,"KAGRA_sensitivity.txt",sep='')
-    #psd_filename=paste(psd_dir,"AVIRGO_sensitivity.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V6}   # Design
   
@@ -442,22 +450,18 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     sens=data$V4   # HF + LF
     cutoff=1e-44}
   
-  if (detector=="CEH"){
-    psd_filename=paste(psd_dir,"curves_Jan_2020/ce1.txt",sep='')
+  if (detector=="CE1"){
+    #psd_filename=paste(psd_dir,"curves_Jan_2020/ce1.txt",sep='')
+    psd_filename=paste(psd_dir,"ce_strain/cosmic_explorer.txt",sep='')
     data=read.table(psd_filename);
     sens=data$V2        
     cutoff=1e-44}   
   
-  if (detector=="CEL"){
-    psd_filename=paste(psd_dir,"curves_Jan_2020/ce1.txt",sep='')
+  if (detector=="CE2"){
+    #psd_filename=paste(psd_dir,"curves_Jan_2020/ce2.txt",sep='')
+    psd_filename=paste(psd_dir,"ce_strain/cosmic_explorer_20km.txt",sep='')
     data=read.table(psd_filename);
-    sens=4*data$V2     
-    cutoff=1e-44}
-  
-  if (detector=="CEL2"){
-    psd_filename=paste(psd_dir,"curves_Jan_2020/ce2.txt",sep='')
-    data=read.table(psd_filename);
-    sens=4*data$V2        
+    sens=data$V2     
     cutoff=1e-44}
   
   if (exists("sens")==FALSE){
@@ -510,18 +514,20 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
     }
   }
   
-  if (actPlot==TRUE){
+  if (actPlot){
     fN=4096
     if (type==1){
-      plot(f,psd,log="y",col="blue",xlim=c(1, fN/2),pch=2)
-      points(data$V1,sens*sens,col="red",type="l",pch=1)
+      plot(f, psd, log="y", col="blue", xlim=c(1, fN/2), pch=2,
+           cex.lab=1.8, cex.axis=1.5)
+      points(data$V1, sens*sens, col="red", type="l", pch=1)
     }else{
-      plot(f,psd,log="y",col="blue",xlim=c(1, fN/2),pch=2)
-      points(data$V1,0.5*sens*sens,col="red",type="l",pch=1)
+      plot(f, psd, log="y", col="blue", xlim=c(1, fN/2), pch=2,
+           cex.lab=1.8, cex.axis=1.5)
+      points(data$V1, 0.5*sens*sens, col="red", type="l", pch=1)
     }
     leg = c(detector,"interpolated")
     col = c("red","blue")
-    legend (x=500,y=psd[1]*0.8,legend=leg,cex=.8,col=col,pch=c(1,2))
+    legend (x=500,y=psd[1]*0.8,legend=leg,cex=1.,col=col,pch=c(1,2))
   }
   
   return(psd)
@@ -535,7 +541,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
   # X: input data
   # fs: sampling frequency of X
   # method: filtering method
-  #   "HP" : The fcut parameter is fixed internally (15 Hz)
+  #   "HP" : The fcut parameter is fixed internally (10 Hz)
   #   "spectrum" : the data are whiten in Fourier domain using the noise spectrum estimate
   #   "AR" : AR model
   #   "prewhiten": use the R prewhiten function
@@ -545,7 +551,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
   if (length(X) != length(psd)){
     print(length(X))
     print(length(psd))
-    warning("filtering:filtering::the data and psd vectors must have the same size. Please check")
+    warning("filtering: the data and psd vectors must have the same size. Please check")
   }
   
   n=length(X)
@@ -554,7 +560,7 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
   # compute noise sigma 
   freq2=fs*fftfreq(n)          # two-sided frequency vector
   
-  s0 <- sqrt(trapz(freq2, psd))
+  s0 <- sqrt(2*trapz(freq2[1:(n/2)], psd[1:(n/2)]))
   if (verbose){
     print(sprintf("filtering: ASD noise rms: %g", s0))
   }
@@ -590,9 +596,9 @@ filtering = function(X, fs, method, psd=0, verbose=FALSE){
       # generate another noise TS
       X1 = rnorm(n, mean=0, sd=1);          # Gaussian white noise
       XX1 = fft(X1);                        # FFT computing
-      XXX1 = XX1*sqrt(fs*psd);                 # Coloring
+      XXX1 = XX1*sqrt(psd);                 # Coloring
       Y1 = fft(XXX1, inverse = TRUE);       # FFT inverse
-      Y1 = Re(Y1)/n;               # noise in time domain
+      Y1 = Re(Y1)*sqrt(fs)/n;               # noise in time domain
       
       # compute the PSD
       psdest <- pspectrum(Y1, Y1.frqsamp=fs, ntap.init=6, Nyquist.normalize=TRUE,
@@ -631,7 +637,7 @@ fftfreq = function(n, d = 1){
   ########################################################################
   # surrogate for the numpy fft.fftfreq function that generates the two sided 
   # frequency vector. Defaults d=1 means sampling frequency is 1. 
-  # https://docs.scipy.org/doc/numpy/reference/generated/numpy.fft.fftfreq.html
+  # https://docs.scipy.org/doc/numpy/reference/generated/numpy.fft.fftfreq
   #
   # n: samples number
   # d: sample spacing (inverse of the sampling rate). Defaults to 1
@@ -643,161 +649,4 @@ fftfreq = function(n, d = 1){
   }
   
   return(out);
-}
-
-########################################################################
-int = function(n){
-  ########################################################################
-  # https://stackoverflow.com/questions/31036098/what-is-the-difference-between-int-and-floor-in-python-3
-  if(n < 0 ){
-    return(-floor(abs(n)))
-  }else{
-    return(floor(n))
-  }
-}
-
-
-########################################################################
-compute_SNR = function(wvf, detector="aLIGO", asd=NULL, fcut=0, dist=10, 
-                       pbOff=FALSE, actPlot=FALSE){
-  ########################################################################
-  # Compute the Signal-To-Noise ratio for a given wvf (x$time, x$hoft) 
-  # and a given detector
-  
-  fs=round(1/(wvf$time[2]-wvf$time[1]))
-  n=length(wvf$hoft)
-  a = nextpow2(2*n)         #zero padding and rounding to the next power of 2
-  n2=2^a
-  
-  # Remove or not 0.100s after the bounce (set hoft values to 0)
-  if (pbOff == TRUE){
-    ext=which(wvf$time<0.1)
-    wvf$hoft[ext]=0
-  }
-  
-  
-  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
-  freq2[1]=0.001                 # to avoid plotting pb in logscale
-  freq1=freq2[1:floor(n2/2)]       # one-sided frequency vector
-  
-  # Get the 1 sided PSD
-  if (detector == "ALIGO"){
-    psd=aLIGO_PSD_new(freq1, 1)
-  }else{
-    psd=PSD_fromfiles(freq1, 1, detector)
-  }
-  
-  if (!is.null(asd)){
-    psd = rep(asd*asd, length(freq1))
-  }
-  
-  vec=rep(0,n2)
-  for (i in 1:n){
-    vec[n2/4+i]=vec[n2/4+i]+wvf$hoft[i]*10./dist
-  }  
-  
-  hf=fft(vec);          # normalization wrt the sampling
-  
-  hf=hf[1:(n2/2)]                # The integral is performed over positive freqs
-  
-  hf=subset(hf,freq1-fcut>0)
-  psd=subset(psd,freq1-fcut>0)
-  freq1=subset(freq1, freq1-fcut>0)
-  
-  snr=sqrt(4/fs/n2*sum(abs(hf)^2/psd))
-  
-  if (actPlot){
-    plot (freq1, sqrt(freq1)*abs(hf), log="xy", type="l", xlab="Frequency", ylab="hchar", 
-          col="grey", xlim=c(1, fs/2), ylim=c(1e-24,1e-20), pch=1, panel.first = grid())
-    points(freq1,sqrt(psd), type="l", col="black",pch=2)
-    leg = c("sqrt(fs) x h~(f)", "ASD")
-    col = c("grey","black")
-    legend (x=1,y=6e-22,legend=leg,cex=.8,col=col,pch=c(1,2))
-    title(c("SNR:",snr))
-  }
-  return(snr)  
-}
-
-
-########################################################################
-whiteNoise = function(wvf, SNR, fs=4096, fcut=0, 
-                      actPlot = FALSE, main=NULL, verbose=FALSE){
-  ########################################################################
-  # Create a white gaussian noise that match the desired Signal-To-Noise ratio
-  # for a given waveform (x$time, x$hoft)
-  # Outputs: noisy: signal+noise
-  #          psd: constant psd
-  
-  # Compute the constant (one-sided) psd required to get the desired SNR
-  n=length(wvf$hoft)
-  a=nextpow2(2*n)         #zero padding and rounding to the next power of 2
-  n2=2^a
-  freq2 = fs*fftfreq(n2)         # two-sided frequency vector
-  freq1=freq2[1:floor(n2/2)]
-  
-  vec=rep(0,n2)
-  for (i in 1:n){
-    vec[n2/4+i]=vec[n2/4+i]+wvf$hoft[i]
-  }  
-  
-  hf=fft(vec);     # normalization wrt the sampling
-  
-  hf=hf[1:(n2/2)]    # integral performed over positive frequencies
-  
-  hf=subset(hf,freq1-fcut>0);
-  freq1=subset(freq1, freq1-fcut>0);
-  
-  psd=4/fs/n2*sum(abs(hf)^2)/SNR^2
-  
-  # Create Noise
-  X = rnorm(n, mean=0, sd=1);
-  XX = fft(X);
-  XXX = XX*sqrt(psd)*sqrt(fs);
-  Y = fft(XXX, inverse = TRUE);
-  Y = Re(Y)/n;
-  
-  for (i in 1:n){
-    Y[i] = Y[i] + wvf$hoft[i]
-  }
-  
-  if (verbose){
-    print(sprintf("Gaussian white noise on detector %s with mean %g and standard deviation %g",
-                  main, mean(Y), sd(Y)));
-  }
-  
-  if (actPlot){
-    plot(wvf$time,Y,type='l',col='black',
-         xlab = "Time",ylab="Hoft",main=main)
-    points(wvf$time,wvf$hoft,type='l',col='red')
-    leg = c("Noisy signal", "Signal")
-    col = c("black","red")
-    legend ("topleft",legend=leg,cex=.8,col=col,pch=c(1,2))
-  }
-  
-  return(list(noisy=Y,psd=psd))
-}
-
-
-########################################################################
-compute_cor = function(h1,h2,psd=1,fs=4096){
-  ########################################################################
-  #
-  # Compute the average correlation coefficient between two signals
-  
-  if (length(h1) != length(h2)){
-    print("Signals must be of same length")
-  }
-  T=length(h1);
-  freq=fs*fftfreq(2*T)
-  freq[1]=0.001
-  freq=freq[1:T]   # frequencies used to sample the fourier series
-
-  integrand=(Conj(h1)*h2+h1*Conj(h2))/psd
-  inner_p=Re(trapz(freq,integrand))
-  
-  norm1=Re(trapz(freq,2*abs(h1)^2/psd))
-  norm2=Re(trapz(freq,2*abs(h2)^2/psd))
-  
-  r=inner_p/sqrt(norm1*norm2);
-  return(r)
 }

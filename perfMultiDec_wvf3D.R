@@ -38,11 +38,9 @@ networks=list(c("LHO","LLO"),c("LHO","LLO","VIR","KAG","LAO"));
 network_names=c("HL","HLVKA");
 
 # List of waveforms
-signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220");
+signals=c("s15--3D_eqtr", "s15--3D_pole");
 
 fs=4096;
-#filtering_method=prewhiten;
 filtering_method="spectrum";
 
 # loop over N generation of noisy data
@@ -50,7 +48,7 @@ N=100;
 
 # number and size of distance steps
 dist_nb=61;
-dist_steps=c(0.5,1.0,1.5,1.0,1.0,1.0,2.5,2.5);
+dist_steps=c(0.5, 0.5);
 
 ind_net=0;
 for (detectors in networks){
@@ -80,7 +78,7 @@ for (detectors in networks){
     
     # To use always the same random noise for all waveforms % detectors
     # set.seed(1);
-
+    
     for (j in 1:dist_nb){
       dist = 0.001*(j==1)+(j-1)*dist_steps[ind_sig];
       
@@ -106,14 +104,8 @@ for (detectors in networks){
                                   logPow=TRUE,actPlot=FALSE,verbose=FALSE);
         r = likelihoods$std;
         
-        ### Reduced time window ###
-        r2=list();
-        r2$t = subset(r$t, r$t<=1.5);
-        r2$f = r$f;
-        r2$E = r$E[1:length(r2$t),];
-        
-        out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                          actPlot=FALSE);
+        out = covpbb_LASSO(r=r, mod=fit, true_data=true_data, timeGmode=c(0.,0.6),
+                           limFreq=c(1000), mask_t=c(0.45,0.57), actPlot=FALSE);
         
         result[i+(j-1)*N,1]=dist;
         result[i+(j-1)*N,2]=out$covpbb[1,1];
@@ -127,7 +119,7 @@ for (detectors in networks){
       ind2=N+(j-1)*N;
       print(sprintf("signal %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
                     signal_name, dist, mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])));
-    
+      
     }
     save_dir=sprintf("./perf/2G/favourable/%s/", network_names[ind_net]);
     dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
