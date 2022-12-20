@@ -1,16 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from scipy.ndimage.filters import gaussian_filter1d
-
-def minmax(a, ind_mean, ind_var):
-    N,Y=a.shape
-    
-    out=np.zeros((N,2))    
-    for i in range(N):
-        out[i,0]=max(0, a[i,ind_mean]-a[i,ind_var])
-        out[i,1]=min(1, a[i,ind_mean]+a[i,ind_var])
-    return out
+from scipy.ndimage import gaussian_filter1d
 
 def buildbox(a,index):
     dist=np.unique(a[:,0]) 
@@ -35,29 +26,6 @@ def buildbox(a,index):
         q3.append(np.percentile(data_boxi, 75))
     return dist,q1,q2,q3
 
-def find_chardist(dist,q2, threshold, type):
-    x=-1
-    hs=(dist[1]-dist[0])/2
-    dist_nb=len(q2)
-    if type == 1:
-        test=0
-        for i in range(dist_nb):
-            if q2[i]>threshold:
-                test=1
-            if (q2[i]<threshold and test==1) :
-                x=dist[i]-hs
-                test=0
-    else:
-        test=0
-        for i in range(dist_nb):
-            if q2[i]<threshold:
-                test=1
-            if (q2[i]>threshold and test==1) :
-                x=dist[i]-hs
-                test=0
-        
-    return x
-
 def smooth(y, sigma):
     n_rows=len(y)
     n_cols=len(y[0])
@@ -73,32 +41,54 @@ def smooth(y, sigma):
 # 4 MSE (mean)
 # 5 precision (mean)
 
-folder = 'favourable/'
-
-signals = ["s11.2--LS220", "s15.0--LS220", "s15.0--SFHo", "s15.0--GShen", 
-            "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220"]
-signal_names = ["s11", "s15", "s15S", "s15G", "s20", "s20S",
-                "s25", "s40", "no signal"]
+folder = 'unfavourable'
 
 # signals = ["s11.2--LS220", "s15.0--LS220", "s15.0--SFHo", "s15.0--GShen", 
-#             "s20.0--LS220", "s20.0--SFHo"]
-# signal_names = ["s11", "s15", "s15S", "s15G", "s20", "s20S", "no signal"]
+#             "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220"]
+# sig_nb=np.size(signals)
+# signal_names = ["s11", "s15", "s15S", "s15G", "s20", "s20S",
+#                 "s25", "s40", "no signal"]
+
+signals = ["s15--3D_eqtr", "s15--3D_pole", "s11.2--LS220", "s15.0--LS220", 
+           "s15.0--SFHo", "s15.0--GShen", "s20.0--LS220", "s20.0--SFHo"]
+sig_nb=np.size(signals)
+signal_names = ["s3D_eqtr", "s3D_pole", "s11", "s15", 
+                "s15S", "s15G", "s20", "s20S", "no signal"]
 
 filt = "spectrum"
 
-dist_nb = 60
+dist_nb = 61
 dist_max = np.zeros(dist_nb)
 
 networks = ["HL", "HLVKA"]
-markers = ['--', '-']
-ind_net = 0
+ls = ["--", "-"]
+markers = ['+', 'x']
 
-plt.figure()
+networks = ['HLVKA']
+ls = ['-']
+markers = ['x']
+
+### Plotting parameters ###
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
+
+fs = 20
+lw=3
+
+plt.rc('font', family='serif')
+plt.rc('lines', linewidth=lw)
+custom_cycler = plt.cycler(color=CB_color_cycle)
+plt.rc('axes', prop_cycle=custom_cycler)
+
+fig, ax = plt.subplots(1, 1, figsize=(10, 7))
+ind_net = 0
 for net in networks:
+    print('Network', net)
+    plt.gca().set_prop_cycle(custom_cycler)
     
-    inputfolder = folder + net
+    inputfolder = folder + '/' + net
     
-    sig_nb=np.size(signal_names)
     qq1=np.zeros((dist_nb,sig_nb))
     qq2=np.zeros((dist_nb,sig_nb))
     qq3=np.zeros((dist_nb,sig_nb))
@@ -111,13 +101,6 @@ for net in networks:
         index=1
     else:
         index=5
-    
-# =============================================================================
-#     if quantity == "coverage":
-#         threshold=q95
-#     else:
-#         threshold=q5
-# =============================================================================
     
     ind=0
     for sig in signals:
@@ -133,59 +116,73 @@ for net in networks:
         qq3[:,ind]=q3
         dd[:,ind]=dist
         
+        # find the distance value for which the curve last intersects with y=0.8
+        ind_x1 = [x for x in range(len(q2)) if q2[x] >= 0.8][-1]
+        x1 = dist[ind_x1]
+        y1 = q2[ind_x1]
+        x2 = dist[ind_x1+1]
+        y2 = q2[ind_x1+1]
+        dist08 = x1 + (0.8-y1)*(x2-x1)/(y2-y1)
+        print(sig, 'Distance max over 0.8:', dist08)
+        
         # dist_max is the list that contains the largest distance
         if max(dist)>max(dist_max):
             dist_max = dist
             
-        ind=ind+1
+        ind+=1
     
-        
-    plt.gca().set_prop_cycle(plt.cycler('color', plt.cm.turbo(np.linspace(0, 1, sig_nb))))
-    lineObjects = plt.plot(dd, smooth(qq2,3), markers[ind_net])
-    #plt.plot(dd[:,0:sig_nb-1], qq2[:,0:sig_nb-1], marker="+",linestyle="")
-        
+    lineObjects = ax.plot(dd, smooth(qq2,1), linestyle=ls[ind_net])
+    plt.gca().set_prop_cycle(custom_cycler)
+    ax.plot(dd[:,0:sig_nb], qq2[:,0:sig_nb], marker=markers[ind_net], linestyle="", ms=7)
+    
     ind_net += 1
+        
 
-
-# Noise results    
-filename= folder + 'HLVKA/results_AA_' + filt + '_f2_noise.txt'
+# Noise results
+filename= inputfolder + '/results_AA_' + filt + '_f2_noise.txt'
 a= np.loadtxt(filename, dtype='f', delimiter=' ')
 
-# percentile
+# Percentiles
 q50=np.percentile(a[:,index], 50)
 q95=np.percentile(a[:,index], 95)
 q5=np.percentile(a[:,index], 5)
 
-qq1[:,sig_nb-1]=q5
-qq2[:,sig_nb-1]=q50
-qq3[:,sig_nb-1]=q95
-dd[:,sig_nb-1]=0
+lineObjects += ax.plot(dist_max, q50*np.ones(len(dist_max)), 'k')
 
-# blue-ish area corresponding to the noise reponse for the latter network
-plt.fill_between(dist_max, qq1[:,sig_nb-1], qq3[:,sig_nb-1], alpha=0.05, facecolor='b')
+# blue-ish area corresponding to the noise reponse for the last network
+ax.fill_between(dist_max, q5, q95, alpha=0.05, facecolor='b')
 
+# Add distances from know objects
+ax.axvline(8.2, color='k', linestyle='--', lw=lw-1)
+ax.text(6, 1.04, 'SgrA*', fontsize=0.8*fs)
+ax.axvline(50, color='k', linestyle='--', lw=lw-1)
+ax.text(47, 1.04, 'LMC', fontsize=0.8*fs)
+
+# Set labels and legend
+ax.set_xlim(1,61)
+ax.set_xlabel('Distance [kpc]', fontsize=fs)
 
 if quantity == "coverage":
-    plt.ylim((0,1.02))
-    plt.xlim((1,max(dist_max)))
-    #plt.xlim((1,60))
-    plt.ylabel('Coverage')
-    plt.legend(iter(lineObjects), signal_names, loc='lower right')
+    ax.set_ylim((0,1.02))
+    ax.set_ylabel('Coverage', fontsize=fs)
+    ax.legend(iter(lineObjects), signal_names, loc='upper right', fontsize=0.8*fs)
 else:
-    plt.ylim((0.05,1.05*qq2[0,sig_nb-1]))
-    plt.xlim((1,max(dist_max)))
-    #plt.xlim((1,50))
-    plt.ylabel('$\Delta$')
-    plt.legend(iter(lineObjects), signal_names, loc='upper right')
+    ax.set_ylim((0.05,1.05*qq2[0,sig_nb-1]))
+    ax.set_ylabel('$\Delta$')
+    ax.legend(iter(lineObjects), signal_names, loc='upper right', fontsize=0.8*fs)
 
-plt.xlabel('Distance [kpc]')
+ax.tick_params(labelsize=0.8*fs)
 
-plt.grid(True)
+ax.grid(True)
 
-fig_name = 'HLvsHLVKA_favourable.png';
-plt.savefig(fig_name)
-fig_name = 'HLvsHLVKA_favourable.pdf';
-plt.savefig(fig_name)
+# fig_name = 'perfHLVKA_'+folder+'.png'
+# plt.savefig(fig_name, bbox_inches='tight')
+# fig_name = 'perfHLVKA_'+folder+'.pdf'
+# plt.savefig(fig_name, bbox_inches='tight')
+fig_name = 'perfHLVKA_2D_3D_'+folder+'.png'
+plt.savefig(fig_name, bbox_inches='tight')
+fig_name = 'perfHLVKA_2D_3D_'+folder+'.pdf'
+plt.savefig(fig_name, bbox_inches='tight')
 
 plt.show()    
 
