@@ -176,10 +176,9 @@ ax.tick_params(labelsize=0.8*fs)
 
 ax.grid(True)
 
-fig_name = 'perfHLVKA_'+folder+'.png'
-plt.savefig(fig_name, bbox_inches='tight')
-fig_name = 'perfHLVKA_'+folder+'.pdf'
-plt.savefig(fig_name, bbox_inches='tight')
+fig_name = 'perfHLVKA_'+folder
+plt.savefig(fig_name+'.png', bbox_inches='tight')
+plt.savefig(fig_name+'.pdf', bbox_inches='tight')
 
 plt.show()    
 
