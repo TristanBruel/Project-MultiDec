@@ -37,8 +37,7 @@ networks=list(c("LHO","LLO"),c("LHO","LLO","VIR"),c("LHO","LLO","VIR","KAG"),
 network_names=c("HL","HLV","HLVK","HLVKA","HLVA");
 
 # List of waveforms
-signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo");
+signals=c("s25.0--LS220", "s40.0--LS220");
 
 fs=4096;
 #filtering_method="prewhiten";
@@ -108,7 +107,8 @@ for (detectors in networks){
         r2$E = r$E[1:length(r2$t),];
         
         out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                          actPlot=FALSE);
+                           mask_f=c(600,700),
+                           actPlot=FALSE);
         
         result[i+(dt-1)*N,1]=time_step*(dt-1);
         result[i+(dt-1)*N,2]=out$covpbb[1,1];

@@ -29,8 +29,8 @@ dec=-16.18;
 ra=18.34;
 skyPosition=c(dec,ra);
 # Time of arrival at the center of Earth
-t0=1330480818; #favourable case
-#t0=1326628818; #unfavourable case
+t0=1325052478; #favourable case
+t0=1325077869; #unfavourable case
 
 detectors=c("LHO","LLO","VIR", "KAG", "LAO");
 
@@ -104,7 +104,7 @@ for (i in 1:N){
 print(sprintf("signal %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
                 signal_name, dist, mean(result[1:N,2]), median(result[1:N,2])));
 
-save_dir="./perf/2G/favourable/HLVKA/";
+save_dir="./perf/2G/unfavourable/HLVKA/";
 dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
 filename=sprintf("results_AA_%s_f2_noise.txt", filtering_method);
 save_path=paste(save_dir, filename, sep='');

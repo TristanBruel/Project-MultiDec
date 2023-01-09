@@ -22,14 +22,16 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 #############################
 ### Simulation parameters ###
 #############################
-# Sky position : Galactic center (SIMBAD catalog http://simbad.u-strasbg.fr/simbad/sim-id?Ident=Galactic+Centre )
+# Sky position : Galactic center (SIMBAD catalog http://simbad.u-strasbg.fr/simbad/sim-id?Ident=Galactic+Centre)
 dec=-29.006;
 ra=17.761;
 skyPosition = c(dec,ra);
-dist=8.2; # distance to the galactic center (in kpc)
+dist=8.2;
+# Change distance to 4 kpc to have roughly the same network SNR as s20.0--LS220 for a source at 8.2 kpc
+# dist=4;
 
 # First arrival time at the center of Earth
-t0=1325048418
+t0=1325048418;
 
 # List of networks
 networks=list(c("LHO","LLO"),c("LHO","LLO","VIR"),c("LHO","LLO","VIR","KAG"),
@@ -37,8 +39,7 @@ networks=list(c("LHO","LLO"),c("LHO","LLO","VIR"),c("LHO","LLO","VIR","KAG"),
 network_names=c("HL","HLV","HLVK","HLVKA","HLVA");
 
 # List of waveforms
-signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo");
+signals=c("s15--3D_eqtr", "s15--3D_pole");
 
 fs=4096;
 #filtering_method="prewhiten";
@@ -101,14 +102,8 @@ for (detectors in networks){
                                   logPow=TRUE,actPlot=FALSE,verbose=FALSE);
         r = likelihoods$std;
         
-        ### Reduced time window ###
-        r2 = list();
-        r2$t = subset(r$t, r$t<=1.5);
-        r2$f = r$f;
-        r2$E = r$E[1:length(r2$t),];
-        
-        out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                          actPlot=FALSE);
+        out = covpbb_LASSO(r=r, mod=fit, true_data=true_data, timeGmode=c(0.,0.6),
+                           limFreq=c(1000), mask_t=c(0.45,0.57), actPlot=FALSE);
         
         result[i+(dt-1)*N,1]=time_step*(dt-1);
         result[i+(dt-1)*N,2]=out$covpbb[1,1];
@@ -124,7 +119,7 @@ for (detectors in networks){
                     signal_name, time_step*(dt-1), mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])));
     }
     
-    save_dir=sprintf("./galaxyCenter/%s/", network_names[ind_net]);
+    save_dir=sprintf("./galaxyCenter_3D/%s/", network_names[ind_net]);
     dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
     filename=sprintf("results_AA_%s_f2_%s.txt", filtering_method, signal_name);
     save_path=paste(save_dir, filename, sep='');

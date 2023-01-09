@@ -24,23 +24,23 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = TRUE);
 #############################
 ### Simulation parameters ###
 #############################
-# Sky position: direction towards Andromeda Galaxy
-dec=41.27;
-ra=0.71;
+# Sky position: direction inside the Sagittarius constellation
+dec=-16.18;
+ra=18.34;
 skyPosition=c(dec,ra);
 # Time of arrival at the center of Earth
-t0=1350514818 #favourable case
-#t0=1355047218 #unfavourable case
+t0=1325052478; #favourable case
+#t0=1325077869; #unfavourable case
 
-detectors=c("CE1","CE2","ET1","ET2","ET3")
+detectors=c("LHO","LLO","VIR", "KAG", "LAO");
 
 nDet=length(detectors);
 
-signal_name=c("s20.0--LS220");
+signal_name=c("s25.0--LS220");
 dist=1e6;
 
 fs=4096;
-#filtering_method="prewhiten";
+#filtering_method="prewhiten"
 filtering_method="spectrum";
 
 # loop over N generation of noisy data and add signal
@@ -91,6 +91,7 @@ for (i in 1:N){
   r2$E = r$E[1:length(r2$t),];
   
   out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
+                     mask_f=c(600,700),
                      actPlot=FALSE);
   
   result[i,1]=dist;
@@ -104,8 +105,8 @@ for (i in 1:N){
 print(sprintf("signal %s @ distance: %f kpc. Covpbb mean:%f. Covpbb median: %f",
               signal_name, dist, mean(result[1:N,2]), median(result[1:N,2])));
 
-save_dir="./perf/3G/favourable/CE_ET/";
+save_dir="./perf/2G/favourable/HLVKA/";
 dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
-filename=sprintf("results_AA_%s_f2_noise.txt", filtering_method);
+filename=sprintf("results_AA_%s_f2_%s_noise.txt", filtering_method, signal_name);
 save_path=paste(save_dir, filename, sep='');
 write.table(result, file=save_path, sep=" ", row.names=FALSE, col.names=FALSE)

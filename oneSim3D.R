@@ -32,7 +32,7 @@ skyPosition=c(dec,ra)
 # Time of arrival at the center of Earth
 t0=1325048418
 # Distance of the source
-dist=1
+dist=2
 
 detectors=c("LHO","LLO","VIR","KAG","LAO")
 nDet=length(detectors)
@@ -58,7 +58,7 @@ psd = matrix(0,nrow = l/2+1, ncol = nDet);
 freq = fs*seq(0,1/2,by=1/l);
 
 
-set.seed(1)
+set.seed(2)
 
 d = data_multiDec(fs=fs,wvfs=wvfs,ampl=10/dist,detectors=detectors, 
                   filter=filtering_method, setseed=0,
@@ -78,7 +78,7 @@ likelihoods = timeFreqMap(fs=fs,wData=wData,detectors=detectors,psd=psd,
 r = likelihoods$std
 
 out = covpbb_LASSO(r=r, mod=fit, true_data=true_data, timeGmode=c(0.,0.6),
-                   limFreq=c(1000), mask_t=c(0.45,0.57), actPlot=TRUE, saveToTxt=TRUE);
+                   limFreq=c(1000), mask_t=c(0.44,0.57), actPlot=TRUE, saveToTxt=TRUE);
 print(sprintf("signal %s @ distance: %f kpc. Covpbb: %f", signal_name, dist, out$covpbb[1,1]))
 
 ### Compare to 'true' g2-mode ###

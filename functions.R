@@ -392,6 +392,10 @@ covpbb_LASSO = function(r, mod, movBand = 5, true_data, timeGmode = NULL,
     }
     
     ### generating band function ### 
+    ## if not enough g-mode points to smooth the band, no smoothing
+    if (length(pred[,1]) < movBand){
+      movBand = 1
+    }
     
     # interpolating lower bound for predicted values
     fd = approxfun(x = timefreq1, y = movf(pred[,2],n=movBand,mean), method = "linear",

@@ -430,19 +430,19 @@ PSD_fromfiles=function(f, type, detector, actPlot=FALSE){
   psd_dir="inputs/PSD/"
   
   if ((detector=="LHO") || (detector=="LLO") || (detector=="LAO") ){
-    psd_filename=paste(psd_dir,"ALIGO_sensitivity.txt",sep='')
+    psd_filename=paste(psd_dir,"AplusDesign.txt",sep='')
     data=read.table(psd_filename);
-    sens=data$V6}   # Design
+    sens=data$V2}   # Advanced LIGO Design
   
   if (detector=="VIR"){
-    psd_filename=paste(psd_dir,"AVIRGO_sensitivity.txt",sep='')
+    psd_filename=paste(psd_dir,"avirgo_O5high_NEW.txt",sep='')
     data=read.table(psd_filename);
-    sens=data$V6}   # Design
+    sens=data$V2}   # Advanced Virgo phase 2 high range
   
   if (detector=="KAG"){
-    psd_filename=paste(psd_dir,"KAGRA_sensitivity.txt",sep='')
+    psd_filename=paste(psd_dir,"kagra_128Mpc.txt",sep='')
     data=read.table(psd_filename);
-    sens=data$V6}   # Design
+    sens=data$V2}   # Design
   
   if ((detector=="ET1") || (detector=="ET2") || (detector=="ET3")){
     psd_filename=paste(psd_dir,"ET_D_sensitivity.txt",sep='')
