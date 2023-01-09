@@ -119,7 +119,7 @@ for (detectors in networks){
                     signal_name, time_step*(dt-1), mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])));
     }
     
-    save_dir=sprintf("./galaxyCenter_3D/%s/", network_names[ind_net]);
+    save_dir=sprintf("./galaxyCenter/%s/", network_names[ind_net]);
     dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
     filename=sprintf("results_AA_%s_f2_%s.txt", filtering_method, signal_name);
     save_path=paste(save_dir, filename, sep='');
