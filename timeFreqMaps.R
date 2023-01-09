@@ -11,7 +11,7 @@ library(signal)
 timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
                        skyPosition,t,integLength,offsetLength,transientLength,
                        freqLim=c(0,Inf),windowType="modifiedHann",startTime=0,
-                       logPow=TRUE,verbose=FALSE,actPlot=FALSE){
+                       logPow=TRUE,verbose=FALSE,actPlot=FALSE,saveToTxt=FALSE){
   ######################################################################
   # Inputs :  fs: sampling frequency
   #           wData: matrix of time-domain whitened data
@@ -144,13 +144,13 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
     
     # Save the squared magnitudes
     detSpec[,,k]=Re(TFMap[,,k])^2+Im(TFMap[,,k])^2;
-    if(logPow == TRUE){
+    if(logPow){
       detSpec[,,k]=log10(sqrt(detSpec[,,k]));
     }
     if (actPlot){
       image.plot(timeIndices+delays[k],inbandFreq,t(detSpec[,,k]),
                  xlab="Time [s]",ylab="Frequency [Hz]",
-                 main=c(detectors[k],"Spectrogram"))
+                 main=c(detectors[k],"Spectrogram"), cex.lab=1.8, cex.axis=1.5)
     }
   }
   
@@ -247,6 +247,15 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
     softLikelihood=log10(sqrt(softLikelihood));
   }
   
+  # save time bins, frequency bins and standard likelihood to txt files
+  if (saveToTxt){
+    dir.create(path='oneSim/stdLike/', showWarnings=FALSE, recursive=TRUE);
+    write.table(timeIndices,'oneSim/stdLike/times.txt', row.names = FALSE, col.names = FALSE);
+    write.table(inbandFreq,'oneSim/stdLike/freqs.txt', row.names = FALSE, col.names = FALSE);
+    write.table(stdLikelihood,'oneSim/stdLike/energies.txt', row.names = FALSE, col.names = FALSE);
+    print('Text files for standard likelihood saved in ./oneSim/stdLike/')
+  }
+  
   ### Plot Maps ###
   if (actPlot){
     image.plot(timeIndices,inbandFreq,t(plusLikelihood),
@@ -266,5 +275,6 @@ timeFreqMap = function(fs=4096,wData,detectors=c("LHO","LLO","VIR"),psd,
   rcross=list(t=timeIndices,f=inbandFreq,E=t(crossLikelihood))
   rstd=list(t=timeIndices,f=inbandFreq,E=t(stdLikelihood))
   rsoft=list(t=timeIndices,f=inbandFreq,E=t(softLikelihood))
+  
   return(list(Eplus=rplus,Ecross=rcross,std=rstd,soft=rsoft))
 }
