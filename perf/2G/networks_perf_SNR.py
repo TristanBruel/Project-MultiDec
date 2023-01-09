@@ -43,9 +43,19 @@ def smooth(y, sigma):
 
 folder = 'favourable'
 
-signals = ["s25.0--LS220", "s40.0--LS220"]
+# signals = ["s11.2--LS220", "s15.0--LS220", "s15.0--SFHo", "s15.0--GShen", 
+#             "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220"]
+# sig_nb=np.size(signals)
+# signal_names = ["s11", "s15", "s15S", "s15G", "s20", "s20S",
+#                 "s25", "s40", "no signal"]
+
+signals = ["s15--3D_eqtr", "s15--3D_pole", "s11.2--LS220", "s15.0--LS220", 
+           "s15.0--SFHo", "s15.0--GShen", "s20.0--LS220", "s20.0--SFHo",
+           "s25.0--LS220", "s40.0--LS220"]
 sig_nb=np.size(signals)
-signal_names = ["s25", "s40", "no signal"]
+signal_names = ["s15--3De", "s15--3Dp", "s11", "s15", 
+                "s15S", "s15G", "s20", "s20S", 
+                "s25", "s40"]
 
 filt = "spectrum"
 
@@ -56,14 +66,14 @@ networks = ["HL", "HLVKA"]
 ls = ["--", "-"]
 markers = ['+', 'x']
 
-# networks = ['HLVKA']
-# ls = ['-']
-# markers = ['x']
+networks = ['HLVKA']
+ls = ['-']
+markers = ['x']
 
 ### Plotting parameters ###
 CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#f781bf', '#a65628', '#984ea3',
-                  '#999999', '#e41a1c', '#dede00']
+                  '#999999', '#e41a1c', '#dede00', '#000000']
 
 fs = 20
 lw=3
@@ -85,6 +95,7 @@ for net in networks:
     qq2=np.zeros((dist_nb,sig_nb))
     qq3=np.zeros((dist_nb,sig_nb))
     dd=np.zeros((dist_nb,sig_nb))
+    SNRs=np.zeros((dist_nb,sig_nb))
     
     quantity="coverage"
     #quantity="delta"
@@ -108,14 +119,11 @@ for net in networks:
         qq3[:,ind]=q3
         dd[:,ind]=dist
         
-        # find the distance value for which the curve last intersects with y=0.8
-        ind_x1 = [x for x in range(len(q2)) if q2[x] >= 0.8][-1]
-        x1 = dist[ind_x1]
-        y1 = q2[ind_x1]
-        x2 = dist[ind_x1+1]
-        y2 = q2[ind_x1+1]
-        dist08 = x1 + (0.8-y1)*(x2-x1)/(y2-y1)
-        print(sig, 'Distance max over 0.8:', dist08)
+        SNR_file= inputfolder + '/SNRs_' + sig + '_' + net + '.txt'
+        SNR_sig = np.loadtxt(SNR_file, skiprows=1)
+        #SNRs[:,ind] = SNR_sig[:,0] # SNR in LIGO Hanford
+        #SNRs[:,ind] = np.max(SNR_sig, axis=1) # max SNR in the network
+        SNRs[:,ind] = np.sqrt(np.sum(SNR_sig**2, axis=1)) # quadratic SNR
         
         # dist_max is the list that contains the largest distance
         if max(dist)>max(dist_max):
@@ -123,42 +131,23 @@ for net in networks:
             
         ind+=1
     
-    lineObjects = ax.plot(dd, smooth(qq2,1), linestyle=ls[ind_net])
+    lineObjects = ax.plot(SNRs, smooth(qq2,1), linestyle=ls[ind_net])
     plt.gca().set_prop_cycle(custom_cycler)
-    #ax.plot(dd[:,0:sig_nb], qq2[:,0:sig_nb], marker=markers[ind_net], linestyle="", ms=7)
-    ax.plot(dd, qq2, marker=markers[ind_net], linestyle="", ms=7)
+    ax.plot(SNRs, qq2, marker=markers[ind_net], linestyle="", ms=7)
     
     ind_net += 1
-        
-
-# Noise results
-filename= inputfolder + '/results_AA_' + filt + '_f2_s25.0--LS220_noise.txt'
-a= np.loadtxt(filename, dtype='f', delimiter=' ')
-
-# Percentiles
-q50=np.percentile(a[:,index], 50)
-q95=np.percentile(a[:,index], 95)
-q5=np.percentile(a[:,index], 5)
-
-lineObjects += ax.plot(dist_max, q50*np.ones(len(dist_max)), 'k')
-
-# blue-ish area corresponding to the noise reponse for the last network
-ax.fill_between(dist_max, q5, q95, alpha=0.05, facecolor='b')
-
-# Add distances from know objects
-ax.axvline(8.2, color='k', linestyle='--', lw=lw-1)
-ax.text(6, 1.04, 'SgrA*', fontsize=0.8*fs)
-ax.axvline(50, color='k', linestyle='--', lw=lw-1)
-ax.text(47, 1.04, 'LMC', fontsize=0.8*fs)
+    
 
 # Set labels and legend
-ax.set_xlim(1,301)
-ax.set_xlabel('Distance [kpc]', fontsize=fs)
+ax.set_xlim(0,100)
+#ax.set_xlabel('SNR in LIGO Hanford', fontsize=fs)
+#ax.set_xlabel('Maximum SNR in network HLVKA', fontsize=fs)
+ax.set_xlabel('Quadratic SNR in network HLVKA', fontsize=fs)
 
 if quantity == "coverage":
     ax.set_ylim((0,1.02))
     ax.set_ylabel('Coverage', fontsize=fs)
-    ax.legend(iter(lineObjects), signal_names, loc='upper right', fontsize=0.8*fs)
+    ax.legend(iter(lineObjects), signal_names, loc='lower right', fontsize=0.8*fs)
 else:
     ax.set_ylim((0.05,1.05*qq2[0,sig_nb-1]))
     ax.set_ylabel('$\Delta$')
@@ -168,7 +157,7 @@ ax.tick_params(labelsize=0.8*fs)
 
 ax.grid(True)
 
-fig_name = 'perfHLVKA_s25-40_'+folder
+fig_name = 'perfHLVKA_SNR_'+folder
 plt.savefig(fig_name+'.png', bbox_inches='tight')
 plt.savefig(fig_name+'.pdf', bbox_inches='tight')
 

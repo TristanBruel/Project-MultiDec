@@ -43,16 +43,10 @@ def smooth(y, sigma):
 
 folder = 'favourable'
 
-# signals = ["s11.2--LS220", "s15.0--LS220", "s15.0--SFHo", "s15.0--GShen", 
-#             "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220"]
-# sig_nb=np.size(signals)
-# signal_names = ["s11", "s15", "s15S", "s15G", "s20", "s20S",
-#                 "s25", "s40", "no signal"]
-
 signals = ["s15--3D_eqtr", "s15--3D_pole", "s11.2--LS220", "s15.0--LS220", 
-           "s15.0--SFHo", "s15.0--GShen", "s20.0--LS220", "s20.0--SFHo"]
+            "s15.0--SFHo", "s15.0--GShen", "s20.0--LS220", "s20.0--SFHo"]
 sig_nb=np.size(signals)
-signal_names = ["s3D_eqtr", "s3D_pole", "s11", "s15", 
+signal_names = ["s15--3De", "s15--3Dp", "s11", "s15", 
                 "s15S", "s15G", "s20", "s20S", "no signal"]
 
 filt = "spectrum"
@@ -160,7 +154,7 @@ ax.axvline(50, color='k', linestyle='--', lw=lw-1)
 ax.text(47, 1.04, 'LMC', fontsize=0.8*fs)
 
 # Set labels and legend
-ax.set_xlim(1,61)
+ax.set_xlim(1,121)
 ax.set_xlabel('Distance [kpc]', fontsize=fs)
 
 if quantity == "coverage":
