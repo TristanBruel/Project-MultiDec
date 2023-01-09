@@ -30,16 +30,16 @@ dec=-16.18;
 ra=18.34;
 skyPosition=c(dec,ra);
 # Time of arrival at the center of Earth
-t0=1330480818; #favourable case
-#t0=1326628818; #unfavourable case
+t0=1325052478; #favourable case
+t0=1325077869; #unfavourable case
 
 # List of networks
-networks=list(c("LHO","LLO"),c("LHO","LLO","VIR","KAG","LAO"));
-network_names=c("HL","HLVKA");
+networks=list(c("LHO","LLO"), c("LHO","LLO","VIR","KAG","LAO"));
+network_names=c("HL", "HLVKA");
 
 # List of waveforms
 signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo", "s25.0--LS220", "s40.0--LS220");
+          "s20.0--LS220", "s20.0--SFHo");
 
 fs=4096;
 #filtering_method=prewhiten;
@@ -50,7 +50,7 @@ N=100;
 
 # number and size of distance steps
 dist_nb=61;
-dist_steps=c(0.5,1.0,1.5,1.0,1.0,1.0,2.5,2.5);
+dist_steps=c(1.0,2.0,2.5,2.0,1.5,1.5,2.5,2.5);
 
 ind_net=0;
 for (detectors in networks){
@@ -129,7 +129,7 @@ for (detectors in networks){
                     signal_name, dist, mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])));
     
     }
-    save_dir=sprintf("./perf/2G/favourable/%s/", network_names[ind_net]);
+    save_dir=sprintf("./perf/2G/unfavourable/%s/", network_names[ind_net]);
     dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
     filename=sprintf("results_AA_%s_f2_%s.txt", filtering_method, signal_name);
     save_path=paste(save_dir, filename, sep='');

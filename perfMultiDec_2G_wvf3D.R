@@ -25,26 +25,22 @@ fit = lmvar(fits_data$r, X_mu = Xm, X_sigma = Xs, intercept_mu = FALSE);
 #############################
 ### Simulation parameters ###
 #############################
-# Sky position: direction towards Andromeda Galaxy
-dec=41.27;
-ra=0.71;
+# Sky position: direction inside the Sagittarius constellation
+dec=-16.18;
+ra=18.34;
 skyPosition=c(dec,ra);
 # Time of arrival at the center of Earth
-#t0=1350514818 #favourable case
-t0=1355047218 #unfavourable case
+t0=1325052478; #favourable case
+t0=1325077869; #unfavourable case
 
 # List of networks
-#networks=list(c("CE1","CE2"),c("ET1","ET2","ET3"),c("ET1","ET2","ET3","CE1","CE2"))
-#network_names=c("CE","ET","ET_CE")
-networks=list(c("CE1","CE2","ET1","ET2","ET3"));
-network_names=c("CE_ET");
+networks=list(c("LHO","LLO"),c("LHO","LLO","VIR","KAG","LAO"));
+network_names=c("HL","HLVKA");
 
 # List of waveforms
-signals=c("s11.2--LS220", "s15.0--GShen", "s15.0--LS220", "s15.0--SFHo", 
-          "s20.0--LS220", "s20.0--SFHo");
+signals=c("s15--3D_eqtr", "s15--3D_pole");
 
 fs=4096;
-#filtering_method=prewhiten;
 filtering_method="spectrum";
 
 # loop over N generation of noisy data
@@ -52,7 +48,7 @@ N=100;
 
 # number and size of distance steps
 dist_nb=61;
-dist_steps=c(5.0,10.0,15.0,10.0,10.0,10.0,25.0,25.0);
+dist_steps=c(0.5, 0.5);
 
 ind_net=0;
 for (detectors in networks){
@@ -108,14 +104,8 @@ for (detectors in networks){
                                   logPow=TRUE,actPlot=FALSE,verbose=FALSE);
         r = likelihoods$std;
         
-        ### Reduced time window ###
-        r2=list();
-        r2$t = subset(r$t, r$t<=1.5);
-        r2$f = r$f;
-        r2$E = r$E[1:length(r2$t),];
-        
-        out = covpbb_LASSO(r=r2, mod=fit, true_data=true_data, limFreq=c(1000),
-                           actPlot=FALSE);
+        out = covpbb_LASSO(r=r, mod=fit, true_data=true_data, timeGmode=c(0.,0.6),
+                           limFreq=c(1000), mask_t=c(0.45,0.57), actPlot=FALSE);
         
         result[i+(j-1)*N,1]=dist;
         result[i+(j-1)*N,2]=out$covpbb[1,1];
@@ -131,7 +121,7 @@ for (detectors in networks){
                     signal_name, dist, mean(result[ind1:ind2,2]), median(result[ind1:ind2,2])));
       
     }
-    save_dir=sprintf("./perf/3G/unfavourable/%s/", network_names[ind_net]);
+    save_dir=sprintf("./perf/2G/unfavourable/%s/", network_names[ind_net]);
     dir.create(path=save_dir, showWarnings=FALSE, recursive=TRUE);
     filename=sprintf("results_AA_%s_f2_%s.txt", filtering_method, signal_name);
     save_path=paste(save_dir, filename, sep='');
